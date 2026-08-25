@@ -1,0 +1,56 @@
+{
+  "name": "fraud-sim",
+  "version": "0.2.0",
+  "description": "Realistic synthetic attack traffic for testing fintech fraud detection systems",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./adapters": "./src/adapters/index.js",
+    "./streaming": "./src/streaming/index.js",
+    "./llm": "./src/llm/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test test/unit/",
+    "test:integration": "node --test test/integration/",
+    "test:all": "node --test test/",
+    "lint": "echo 'Add ESLint in v0.2'",
+    "example:basic": "node examples/basic-credential-stuffing/index.js",
+    "example:drain": "node examples/account-drain-demo/index.js",
+    "example:mock-target": "node examples/express-mock-target/server.js",
+    "example:adaptive-target": "node examples/adaptive-attacker-demo/demo-target.js",
+    "example:adaptive": "node examples/adaptive-attacker-demo/index.js"
+  },
+  "keywords": [
+    "fraud",
+    "fraud-detection",
+    "security-testing",
+    "fintech",
+    "simulation",
+    "adversarial-testing",
+    "penetration-testing"
+  ],
+  "author": "FriskLayer maintainers and contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/frisklayer/fraud-sim.git"
+  },
+  "bugs": {
+    "url": "https://github.com/frisklayer/fraud-sim/issues"
+  },
+  "homepage": "https://github.com/frisklayer/fraud-sim#readme",
+  "dependencies": {},
+  "devDependencies": {
+    "express": "^4.21.0"
+  }
+}

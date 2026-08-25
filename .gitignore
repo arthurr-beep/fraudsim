@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Build / coverage / pack artifacts
+dist/
+build/
+coverage/
+*.tgz
+.nyc_output/
+
+# AI guides, plans, and agent tooling (local only — do not push)
+guides/
+IMPLEMENTATION_GUIDE.md
+plans/
+*.plan.md
+*.plan.json
+.cursor/
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
+.copilot/
+.github/copilot-instructions.md
