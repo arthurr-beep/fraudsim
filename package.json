@@ -15,6 +15,7 @@
   },
   "files": [
     "src/",
+    "examples/",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -39,16 +40,16 @@
     "adversarial-testing",
     "penetration-testing"
   ],
-  "author": "FriskLayer maintainers and contributors",
+  "author": "Arthur (@arthurr-beep) <arthurraugustus@gmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/frisklayer/fraud-sim.git"
+    "url": "https://github.com/arthurr-beep/fraudsim.git"
   },
   "bugs": {
-    "url": "https://github.com/frisklayer/fraud-sim/issues"
+    "url": "https://github.com/arthurr-beep/fraudsim/issues"
   },
-  "homepage": "https://github.com/frisklayer/fraud-sim#readme",
+  "homepage": "https://github.com/arthurr-beep/fraudsim#readme",
   "dependencies": {},
   "devDependencies": {
     "express": "^4.21.0"

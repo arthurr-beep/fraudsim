@@ -42,3 +42,6 @@ AGENTS.md
 CLAUDE.md
 .copilot/
 .github/copilot-instructions.md
+
+# Publishing runbook — maintainer only, do not push
+docs/PUBLISHING.md

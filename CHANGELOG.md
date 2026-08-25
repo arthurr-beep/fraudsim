@@ -86,6 +86,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 See `IMPLEMENTATION_GUIDE.md` for the detailed phase plan.
 
-[Unreleased]: https://github.com/frisklayer/fraud-sim/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/frisklayer/fraud-sim/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/frisklayer/fraud-sim/releases/tag/v0.1.0
+[Unreleased]: https://github.com/arthurr-beep/fraudsim/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/arthurr-beep/fraudsim/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/arthurr-beep/fraudsim/releases/tag/v0.1.0

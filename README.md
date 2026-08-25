@@ -4,7 +4,7 @@
 
 [![npm version](https://img.shields.io/npm/v/fraud-sim.svg)](https://www.npmjs.com/package/fraud-sim)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![tests](https://github.com/frisklayer/fraud-sim/workflows/test/badge.svg)](https://github.com/frisklayer/fraud-sim/actions)
+[![tests](https://github.com/arthurr-beep/fraudsim/workflows/test/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
 `fraud-sim` is a target-agnostic library for generating realistic fraud attack traffic — credential stuffing, account takeovers, card testing, and LLM-driven adaptive attackers — against any fraud detection system you want to evaluate.
@@ -68,6 +68,42 @@ npm install fraud-sim
 ```
 
 Requires Node.js 20 or higher. Works with ESM and CommonJS.
+
+---
+
+## Test it safely first (no real system needed)
+
+Everything can be exercised against targets that live entirely on your machine
+before you ever point it at a production fraud system. Two shipped options:
+
+**In-process mock — zero dependencies, no network.** Script the responses a
+detection system would return and run a scenario against them:
+
+```js
+import { run } from 'fraud-sim';
+import { mockAdapter } from 'fraud-sim/adapters';
+
+const target = mockAdapter({
+  scoreLogin: [{ decision: 'ALLOW' }, { decision: 'STEP_UP' }, { decision: 'BLOCK' }],
+});
+const report = await run('credential-stuffing', {
+  target,
+  options: { targetUserId: 'victim_001', attackerCount: 3, attemptsPerIp: 1 },
+});
+console.log(report); // { attempts, blocked, stepUp, allowed, blockRate, ... }
+```
+
+**Bundled mock HTTP target — a realistic practice range.** The package ships a
+small Express server with an actual rules engine. Install `express` once
+(`npm install express`), then:
+
+```bash
+npm run example:mock-target   # terminal 1 → http://localhost:4000
+npm run example:basic         # terminal 2 → attacks it, watch decisions escalate
+```
+
+Graduating to the real thing is a one-line change — swap the `baseUrl`. Full
+walk-through in **[docs/TESTING.md](docs/TESTING.md)**.
 
 ---
 
@@ -416,7 +452,7 @@ If you've found a bug, open an issue with a minimal reproduction. If you have a 
 
 ## Maintainers
 
-`fraud-sim` is maintained by the team building [FriskLayer](https://frisklayer.com), a real-time fraud detection platform for African fintech. FriskLayer is a commercial product; `fraud-sim` is independent open source under the MIT license.
+`fraud-sim` is maintained by [Arthur (@arthurr-beep)](https://github.com/arthurr-beep). It is independent open source under the MIT license.
 
 Why we built this: real fraud detection systems need real adversarial testing, and the existing tooling for fraud teams was either ad-hoc scripts or vendor-locked. We wanted a tool that worked for everyone, including against our own product. That's the version we shipped.
 
@@ -441,7 +477,7 @@ If you use `fraud-sim` in academic research, please cite it:
   title = {fraud-sim: A library for adversarial testing of fintech fraud detection systems},
   author = {{FriskLayer maintainers and contributors}},
   year = {2025},
-  url = {https://github.com/frisklayer/fraud-sim},
+  url = {https://github.com/arthurr-beep/fraudsim},
   license = {MIT}
 }
 ```

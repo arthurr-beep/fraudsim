@@ -20,7 +20,7 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 ## Setting up locally
 
 ```bash
-git clone https://github.com/frisklayer/fraud-sim.git
+git clone https://github.com/arthurr-beep/fraudsim.git
 cd fraud-sim
 npm install
 npm test

@@ -18,7 +18,7 @@
 
 ## Disclosure process
 
-Please email security@frisklayer.com with:
+Please email arthurraugustus@gmail.com with:
 
 - A description of the issue
 - Steps to reproduce
