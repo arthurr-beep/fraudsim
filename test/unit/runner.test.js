@@ -10,7 +10,7 @@ test('Runner.run normalises the report shape', async () => {
     name: 'Test',
     description: 'desc',
     defaultOptions: { foo: 1 },
-    async run(ctx) {
+    async run(_ctx) {
       return { attempts: 5, blocked: 3, stepUp: 1, allowed: 1 };
     },
   };

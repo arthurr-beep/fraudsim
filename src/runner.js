@@ -32,7 +32,6 @@ export class Runner {
       } catch (err) {
         // Subscribers should not break simulations.
         // We log to stderr but continue.
-        // eslint-disable-next-line no-console
         console.error('[fraud-sim] subscriber threw:', err);
       }
     };

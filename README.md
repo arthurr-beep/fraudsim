@@ -5,6 +5,8 @@
 [![npm version](https://img.shields.io/npm/v/fraud-sim.svg)](https://www.npmjs.com/package/fraud-sim)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![tests](https://github.com/arthurr-beep/fraudsim/workflows/test/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
+[![lint](https://github.com/arthurr-beep/fraudsim/workflows/lint/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
+[![secret-scan](https://github.com/arthurr-beep/fraudsim/workflows/secret-scan/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
 `fraud-sim` is a target-agnostic library for generating realistic fraud attack traffic — credential stuffing, account takeovers, card testing, and LLM-driven adaptive attackers — against any fraud detection system you want to evaluate.

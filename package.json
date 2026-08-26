@@ -24,7 +24,8 @@
     "test": "node --test test/unit/",
     "test:integration": "node --test test/integration/",
     "test:all": "node --test test/",
-    "lint": "echo 'Add ESLint in v0.2'",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "example:basic": "node examples/basic-credential-stuffing/index.js",
     "example:drain": "node examples/account-drain-demo/index.js",
     "example:mock-target": "node examples/express-mock-target/server.js",
@@ -50,8 +51,10 @@
     "url": "https://github.com/arthurr-beep/fraudsim/issues"
   },
   "homepage": "https://github.com/arthurr-beep/fraudsim#readme",
-  "dependencies": {},
   "devDependencies": {
-    "express": "^4.21.0"
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "express": "^4.21.0",
+    "globals": "^17.11.0"
   }
 }
