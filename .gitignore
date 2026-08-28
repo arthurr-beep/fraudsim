@@ -45,3 +45,4 @@ CLAUDE.md
 
 # Publishing runbook — maintainer only, do not push
 docs/PUBLISHING.md
+.npmrc
