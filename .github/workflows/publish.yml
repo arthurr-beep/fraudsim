@@ -1,0 +1,65 @@
+name: publish
+
+# Publishes to npm using trusted publishing (OIDC).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Pack and validate without publishing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      # Required to mint the OIDC token used for trusted publishing and provenance.
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing requires npm 11.5.1 or newer, which ships with
+      # neither Node 20 nor Node 22.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - run: npm ci
+
+      - name: Run tests
+        run: npm run test:all
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check that the tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "Release tag $tag does not match package.json version $pkg" >&2
+            exit 1
+          fi
+
+      - name: Inspect the tarball contents
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: github.event_name == 'release' || inputs.dry-run == false
+        run: npm publish --provenance --access public
