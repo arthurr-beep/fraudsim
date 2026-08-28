@@ -21,9 +21,9 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node --test test/unit/",
-    "test:integration": "node --test test/integration/",
-    "test:all": "node --test test/",
+    "test": "cd test/unit && node --test",
+    "test:integration": "cd test/integration && node --test",
+    "test:all": "cd test && node --test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "example:basic": "node examples/basic-credential-stuffing/index.js",
