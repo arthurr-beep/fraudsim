@@ -98,21 +98,61 @@ test('httpAdapter maps responses via responseMap', async () => {
   assert.equal(result.reasons[0].code, 'NEW_DEVICE');
 });
 
-test('httpAdapter handles non-2xx responses as BLOCK', async () => {
-  const fakeFetch = async () => ({
-    ok: false,
-    status: 429,
-    json: async () => ({ error: 'rate limited' }),
-  });
+const failingFetch = (status, headers = {}) => async () => ({
+  ok: false,
+  status,
+  json: async () => ({ error: 'boom' }),
+  headers: { get: (k) => headers[k] ?? null },
+});
 
+test('httpAdapter reports HTTP failures as errors, not blocks', async () => {
+  // If a 429 or a 503 counted as a BLOCK, rate-limiting the simulator or
+  // crashing the target would *raise* its measured block rate — the benchmark
+  // would reward a target for falling over.
+  const cases = [
+    [429, 'RATE_LIMITED'],
+    [500, 'SERVER_ERROR'],
+    [503, 'SERVER_ERROR'],
+    [401, 'AUTH_ERROR'],
+    [403, 'AUTH_ERROR'],
+    [404, 'ENDPOINT_NOT_FOUND'],
+    [418, 'HTTP_ERROR'],
+  ];
+
+  for (const [status, code] of cases) {
+    const target = httpAdapter({ baseUrl: 'https://example.com', fetch: failingFetch(status) });
+    const result = await target.scoreLogin({});
+
+    assert.equal(result.decision, 'ERROR', `HTTP ${status} should not be a decision`);
+    assert.equal(result.reasons[0].code, code);
+    assert.equal(result.httpStatus, status);
+    assert.equal(result.infraError, true);
+    assert.equal(result.riskScore, null);
+  }
+});
+
+test('httpAdapter treats a status as a block only when told to', async () => {
   const target = httpAdapter({
     baseUrl: 'https://example.com',
-    fetch: fakeFetch,
+    fetch: failingFetch(403),
+    blockOnStatus: [403],
   });
 
   const result = await target.scoreLogin({});
   assert.equal(result.decision, 'BLOCK');
-  assert.equal(result.httpStatus, 429);
+  assert.equal(result.reasons[0].code, 'HTTP_BLOCK');
+  assert.equal(result.httpStatus, 403);
+  assert.ok(!result.infraError);
+});
+
+test('httpAdapter surfaces Retry-After when the target rate-limits', async () => {
+  const target = httpAdapter({
+    baseUrl: 'https://example.com',
+    fetch: failingFetch(429, { 'retry-after': '30' }),
+  });
+
+  const result = await target.scoreLogin({});
+  assert.equal(result.retryAfter, '30');
 });
 
 test('httpAdapter handles network errors as ERROR decision', async () => {
@@ -127,6 +167,7 @@ test('httpAdapter handles network errors as ERROR decision', async () => {
 
   const result = await target.scoreLogin({});
   assert.equal(result.decision, 'ERROR');
+  assert.equal(result.infraError, true);
   assert.match(result.reasons[0].label, /connection refused/);
 });
 

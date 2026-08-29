@@ -108,3 +108,30 @@ test('runSuite runs all scenarios and returns an aggregate report', async () => 
 test('runSuite requires at least one scenario', async () => {
   await assert.rejects(runSuite({ scenarios: [] }), /at least one scenario/);
 });
+
+test('runSuite aggregate excludes unscored attempts from its rates', async () => {
+  // The README's CI gate reads aggregate.errorRate — it has to exist, and it
+  // has to follow the same rule as a single run.
+  registerScenario({
+    id: 'flaky-suite-scenario',
+    name: 'Flaky',
+    description: 'd',
+    defaultOptions: {},
+    async run() {
+      return { attempts: 10, blocked: 3, stepUp: 0, allowed: 1, errors: 6 };
+    },
+  });
+
+  const result = await runSuite({
+    name: 'suite',
+    target: mockAdapter(),
+    scenarios: [{ id: 'flaky-suite-scenario' }],
+  });
+
+  assert.equal(result.aggregate.errors, 6);
+  assert.equal(result.aggregate.scoredAttempts, 4);
+  assert.equal(result.aggregate.blockRate, 0.75); // 3 of 4 scored, not 3 of 10
+  assert.equal(result.aggregate.errorRate, 0.6);
+
+  unregisterScenario('flaky-suite-scenario');
+});

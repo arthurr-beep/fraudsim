@@ -37,7 +37,15 @@ export default {
     targetUserId: null, // required
     attackerIp: null, // optional — random if not provided
     withdrawalCount: 5,
-    amountKobo: 4500000, // NGN 45,000 per withdrawal
+    // NGN 120,000 per withdrawal, in kobo.
+    //
+    // Calibration: rule engines commonly gate "new payee, high amount" near
+    // NGN 50,000 and "large amount from a new device" near NGN 100,000 — the
+    // latter often as a hard block. A default below both means the drain runs
+    // to completion against a correctly configured system and the run reports
+    // a failure that is really just an under-powered attack. Lower this to
+    // find where a specific target's amount thresholds actually sit.
+    amountKobo: 12000000,
     delayBetweenWithdrawalsMs: 15000, // 15 seconds
     postLoginPauseMs: 30000, // 30 seconds — attackers move fast after password change
     skipPasswordChange: false,

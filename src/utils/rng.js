@@ -1,10 +1,9 @@
 /**
  * Seeded pseudo-random number generator.
  *
- * `random.js` uses `Math.random()`, which is fine for generating attack traffic
- * but useless when a run has to be reproducible. The deterministic LLM provider
- * needs the same seed to produce the same strategy for the same history, so it
- * uses this instead.
+ * Backs both seeded runs (installed as the run's random source by the runner —
+ * see `random-source.js`) and the deterministic LLM provider, which needs the
+ * same seed to produce the same strategy for the same history.
  *
  * Algorithm is mulberry32 — small, fast, and good enough for synthetic data.
  * It is NOT cryptographically secure and must never be used for anything that

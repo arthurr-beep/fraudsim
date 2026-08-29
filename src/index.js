@@ -13,6 +13,20 @@
 import { Runner } from './runner.js';
 import { scenarios as builtInScenarios } from './scenarios/index.js';
 
+/**
+ * The fixed attacker IP pool, with declared geolocation and reputation.
+ *
+ * Re-exported here so a system under test can pre-warm its IP-intelligence
+ * cache before a run. Most fraud engines resolve IP intel asynchronously and
+ * fall back to neutral values on a cache miss — in a short simulation every IP
+ * is new, so proxy, abuse-score, and geo rules never fire and the run
+ * understates what the defence catches. Seeding from this pool removes that
+ * blind spot, along with any dependency on a third-party lookup during a run.
+ *
+ * Used by scenarios when `options.ipPersona` is anything other than 'random'.
+ */
+export { DEMO_IP_POOL, pickDemoIp } from './utils/random.js';
+
 // Module-level registry — extensible via registerScenario()
 const registry = new Map();
 for (const scenario of builtInScenarios) {
@@ -28,6 +42,11 @@ for (const scenario of builtInScenarios) {
  * @param {object} [config.options] - Scenario-specific options (merged with defaults)
  * @param {function} [config.onEvent] - Event callback (event) => void
  * @param {AbortSignal} [config.signal] - For cancellation
+ * @param {number} [config.seed] - Seed the run's randomness so it replays
+ *   identically. Controls every generated value (IPs, devices, amounts,
+ *   ordering) but not wall-clock timestamps.
+ * @param {number} [config.maxRequestsPerSecond=25] - Ceiling on outbound
+ *   requests. `Infinity` disables it.
  * @returns {Promise<ScenarioReport>}
  */
 export async function run(scenarioId, config = {}) {
@@ -70,6 +89,15 @@ export async function runSuite(config = {}) {
       target: config.target,
       options: entry.options ?? {},
       onEvent: config.onEvent,
+      signal: config.signal,
+      llm: entry.llm ?? config.llm,
+      // Each scenario gets a distinct but derived seed, so a suite is
+      // reproducible as a whole without every scenario replaying the same
+      // sequence of values.
+      ...(config.seed != null ? { seed: config.seed + scenarioReports.length } : {}),
+      ...(config.maxRequestsPerSecond != null
+        ? { maxRequestsPerSecond: config.maxRequestsPerSecond }
+        : {}),
     });
     scenarioReports.push(report);
   }
@@ -140,16 +168,26 @@ function aggregateReports(reports) {
     blocked: 0,
     stepUp: 0,
     allowed: 0,
+    errors: 0,
   };
   for (const r of reports) {
     totals.attempts += r.attempts ?? 0;
     totals.blocked += r.blocked ?? 0;
     totals.stepUp += r.stepUp ?? 0;
     totals.allowed += r.allowed ?? 0;
+    totals.errors += r.errors ?? 0;
   }
+
+  // Same rule as a single run: attempts that never received a decision are not
+  // evidence about the defence, so they are excluded from the rates rather than
+  // being credited to it. See Runner.run.
+  const scoredAttempts = Math.max(0, totals.attempts - totals.errors);
+
   return {
     ...totals,
-    blockRate: totals.attempts > 0 ? totals.blocked / totals.attempts : 0,
-    stepUpRate: totals.attempts > 0 ? totals.stepUp / totals.attempts : 0,
+    scoredAttempts,
+    blockRate: scoredAttempts > 0 ? totals.blocked / scoredAttempts : 0,
+    stepUpRate: scoredAttempts > 0 ? totals.stepUp / scoredAttempts : 0,
+    errorRate: totals.attempts > 0 ? totals.errors / totals.attempts : 0,
   };
 }

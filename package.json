@@ -8,7 +8,8 @@
     ".": "./src/index.js",
     "./adapters": "./src/adapters/index.js",
     "./streaming": "./src/streaming/index.js",
-    "./llm": "./src/llm/index.js"
+    "./llm": "./src/llm/index.js",
+    "./utils": "./src/utils/index.js"
   },
   "engines": {
     "node": ">=20"
