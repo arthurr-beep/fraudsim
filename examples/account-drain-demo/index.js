@@ -26,7 +26,7 @@ const report = await run('account-drain', {
   options: {
     targetUserId: 'victim_user_002',
     withdrawalCount: 5,
-    amountKobo: 4500000,
+    amountKobo: 12000000, // NGN 120,000 — clears the common new-payee/new-device gates
     delayBetweenWithdrawalsMs: 500,
     postLoginPauseMs: 1000,
   },

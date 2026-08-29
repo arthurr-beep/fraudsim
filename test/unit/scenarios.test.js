@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../../src/index.js';
 import { mockAdapter } from '../../src/adapters/mock.js';
+import { DEMO_IP_POOL } from '../../src/utils/random.js';
 
 test('credential-stuffing requires targetUserId', async () => {
   await assert.rejects(
@@ -92,6 +93,139 @@ test('credential-stuffing rotates IPs across attempts', async () => {
   const uniqueIps = new Set(calls.map((c) => c.ip_address));
   // We expect 5 different IPs
   assert.equal(uniqueIps.size, 5);
+});
+
+test('credential-stuffing sprays across every account in the dump', async () => {
+  // A credential dump is a list of victims. If the scenario hammers one user,
+  // the target's "one IP, many users" rule can never fire and the run
+  // understates the defence.
+  const target = mockAdapter({ scoreLogin: [{ decision: 'ALLOW' }] });
+  const targetUserIds = Array.from({ length: 12 }, (_, i) => `victim_${i}`);
+
+  const report = await run('credential-stuffing', {
+    target,
+    options: { targetUserIds, attackerCount: 2, attemptsPerIp: 12, delayMs: 0 },
+  });
+
+  const calls = target._calls('scoreLogin');
+  const uniqueUsers = new Set(calls.map((c) => c.user_id));
+
+  assert.equal(uniqueUsers.size, 12);
+  assert.equal(report.accountsTargeted, 12);
+});
+
+test('credential-stuffing has one IP touch many distinct accounts', async () => {
+  const target = mockAdapter({ scoreLogin: [{ decision: 'ALLOW' }] });
+
+  await run('credential-stuffing', {
+    target,
+    options: {
+      targetUserIds: Array.from({ length: 10 }, (_, i) => `u${i}`),
+      attackerCount: 1,
+      attemptsPerIp: 10,
+      delayMs: 0,
+    },
+  });
+
+  const calls = target._calls('scoreLogin');
+  const byIp = new Map();
+  for (const c of calls) {
+    if (!byIp.has(c.ip_address)) byIp.set(c.ip_address, new Set());
+    byIp.get(c.ip_address).add(c.user_id);
+  }
+
+  assert.equal(byIp.size, 1);
+  assert.equal([...byIp.values()][0].size, 10);
+});
+
+test('credential-stuffing still accepts a single targetUserId', async () => {
+  const target = mockAdapter({ scoreLogin: [{ decision: 'ALLOW' }] });
+
+  const report = await run('credential-stuffing', {
+    target,
+    options: { targetUserId: 'solo_victim', attackerCount: 2, attemptsPerIp: 2, delayMs: 0 },
+  });
+
+  const users = new Set(target._calls('scoreLogin').map((c) => c.user_id));
+  assert.deepEqual([...users], ['solo_victim']);
+  assert.equal(report.accountsTargeted, 1);
+});
+
+test('credential-stuffing warns when a single account cannot exercise IP_MANY_USERS', async () => {
+  const events = [];
+  await run('credential-stuffing', {
+    target: mockAdapter({ scoreLogin: [{ decision: 'ALLOW' }] }),
+    options: { targetUserId: 'u1', attackerCount: 1, attemptsPerIp: 1, delayMs: 0 },
+    onEvent: (e) => events.push(e),
+  });
+
+  const warned = events.some(
+    (e) => e.type === 'milestone' && /one IP, many users/.test(e.message)
+  );
+  assert.ok(warned, 'expected a milestone warning about single-account runs');
+});
+
+test('credential-stuffing rejects an empty targetUserIds array', async () => {
+  await assert.rejects(
+    run('credential-stuffing', {
+      target: mockAdapter(),
+      options: { targetUserIds: [] },
+    }),
+    /non-empty array/
+  );
+});
+
+test('credential-stuffing draws pool IPs and attaches intel when given a persona', async () => {
+  const events = [];
+  const target = mockAdapter({ scoreLogin: [{ decision: 'BLOCK' }] });
+
+  await run('credential-stuffing', {
+    target,
+    options: {
+      targetUserIds: ['a', 'b'],
+      attackerCount: 3,
+      attemptsPerIp: 1,
+      delayMs: 0,
+      ipPersona: 'proxy',
+    },
+    onEvent: (e) => events.push(e),
+  });
+
+  for (const ip of target._calls('scoreLogin').map((c) => c.ip_address)) {
+    const entry = DEMO_IP_POOL.find((e) => e.ip === ip);
+    assert.ok(entry, `${ip} is not from the pool`);
+    assert.equal(entry.persona, 'proxy');
+  }
+
+  // The intel rides along on the attempt event so a target can pre-seed.
+  const attempts = events.filter((e) => e.type === 'attempt');
+  assert.equal(attempts.length, 3);
+  for (const a of attempts) {
+    assert.equal(a.ipIntel.proxy, true);
+    assert.ok(a.ipIntel.countryCode);
+  }
+});
+
+test('credential-stuffing omits ipIntel for randomly generated IPs', async () => {
+  const events = [];
+  await run('credential-stuffing', {
+    target: mockAdapter({ scoreLogin: [{ decision: 'ALLOW' }] }),
+    options: { targetUserIds: ['a'], attackerCount: 1, attemptsPerIp: 1, delayMs: 0 },
+    onEvent: (e) => events.push(e),
+  });
+
+  const attempt = events.find((e) => e.type === 'attempt');
+  assert.equal(attempt.ipIntel, undefined);
+});
+
+test('credential-stuffing rejects an unknown ipPersona rather than falling back', async () => {
+  await assert.rejects(
+    run('credential-stuffing', {
+      target: mockAdapter(),
+      options: { targetUserIds: ['a'], attackerCount: 1, attemptsPerIp: 1, delayMs: 0, ipPersona: 'nope' },
+    }),
+    /Unknown IP persona/
+  );
 });
 
 test('credential-stuffing aborts when signal is triggered', async () => {

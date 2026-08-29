@@ -5,10 +5,10 @@ import { mockAdapter } from '../../src/adapters/mock.js';
 
 const opts = { targetUserId: 'victim_1', maxRounds: 5, delayMs: 0 };
 
-test('adaptive-attacker is registered (3 scenarios total)', () => {
+test('adaptive-attacker is registered alongside the full scenario library', () => {
   const ids = listScenarios().map((s) => s.id);
   assert.ok(ids.includes('adaptive-attacker'));
-  assert.equal(ids.length, 3);
+  assert.equal(ids.length, 10);
 });
 
 test('adaptive-attacker requires targetUserId', async () => {

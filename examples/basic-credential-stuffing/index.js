@@ -26,9 +26,11 @@ console.log('\n=== Credential stuffing simulation ===\n');
 const report = await run('credential-stuffing', {
   target,
   options: {
-    targetUserId: 'victim_user_001',
+    // A credential dump is a list of victims. Spraying across accounts is
+    // what lets the target's "one IP, many users" rule fire at all.
+    targetUserIds: Array.from({ length: 12 }, (_, i) => `victim_user_${i + 1}`),
     attackerCount: 10,
-    attemptsPerIp: 3,
+    attemptsPerIp: 25,
     delayMs: 50,
   },
   onEvent: (e) => {
