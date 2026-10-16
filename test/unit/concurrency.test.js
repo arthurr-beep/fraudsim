@@ -10,13 +10,21 @@ const SCENARIOS = (n) =>
     options: { targetUserIds: ['a'], attackerCount: 1, attemptsPerIp: 5, delayMs: 0, maxTotalAttempts: 5 },
   }));
 
+/**
+ * Slack for the gap between when the limiter grants a slot and when the target
+ * stamps the call. If the first call of a window is stamped a few ms late, the
+ * eleventh looks under a second behind it though the limiter held exactly 10/s.
+ * Far below the breach this test exists to catch: 25 × concurrency per second.
+ */
+const JITTER_MS = 50;
+
 /** Largest number of calls landing inside any rolling one-second window. */
 function worstWindow(stamps) {
   const sorted = [...stamps].sort((a, b) => a - b);
   let worst = 0;
   for (let i = 0; i < sorted.length; i++) {
     let n = 0;
-    for (let j = i; j < sorted.length && sorted[j] - sorted[i] < 1000; j++) n++;
+    for (let j = i; j < sorted.length && sorted[j] - sorted[i] < 1000 - JITTER_MS; j++) n++;
     worst = Math.max(worst, n);
   }
   return worst;
