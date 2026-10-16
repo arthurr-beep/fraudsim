@@ -35,9 +35,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       # Trusted publishing requires npm 11.5.1 or newer, which ships with
-      # neither Node 20 nor Node 22.
+      # neither Node 20 nor Node 22. Pinned to the 11 line rather than
+      # `latest`: npm 12 dropped Node 20 and broke this step on release.
       - name: Upgrade npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.5.1
 
       - run: npm ci
 
