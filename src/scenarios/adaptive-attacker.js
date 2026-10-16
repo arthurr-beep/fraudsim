@@ -74,10 +74,13 @@ export default {
       timestamp: Date.now(),
     });
 
+    // Declared outside the loop: each round's strategy is merged over the
+    // parameters actually sent the round before.
+    let parameters;
+
     for (let round = 1; round <= options.maxRounds; round++) {
       if (signal.aborted) break;
 
-      let parameters;
       let reasoning;
 
       if (round === 1) {
@@ -115,6 +118,27 @@ export default {
         reasoning = strategy?.reasoning ?? '';
       }
 
+      const payload = buildLoginPayload(options.targetUserId, {
+        ip_address: parameters.ip,
+        user_agent: parameters.userAgent,
+        ...(parameters.deviceFingerprint
+          ? { device_fingerprint: parameters.deviceFingerprint }
+          : {}),
+      });
+
+      // Record what was actually sent, not what was asked for. A parameter the
+      // strategy left unset is filled in by the payload builder, and the
+      // attacker has to see that value: round 1 never names a fingerprint, so
+      // without this the history said `null` and the device the defender
+      // challenged could never be replayed. It also makes an omitted key mean
+      // "keep it" rather than silently rotating it every round.
+      parameters = {
+        ...parameters,
+        ip: payload.ip_address,
+        userAgent: payload.user_agent,
+        deviceFingerprint: payload.device_fingerprint,
+      };
+
       // Emit the adaptation BEFORE sending — this is the demo moment.
       emit({
         type: 'attacker_adapts',
@@ -124,14 +148,6 @@ export default {
         timestamp: Date.now(),
       });
       results.strategyHistory.push({ round, reasoning, parameters });
-
-      const payload = buildLoginPayload(options.targetUserId, {
-        ip_address: parameters.ip,
-        user_agent: parameters.userAgent,
-        ...(parameters.deviceFingerprint
-          ? { device_fingerprint: parameters.deviceFingerprint }
-          : {}),
-      });
 
       const t0 = Date.now();
       emit({ type: 'attempt', round, payload, timestamp: t0 });
