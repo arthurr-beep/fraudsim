@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] — Cleaner customer-only output, end-to-end walkthrough — 2026-10-16
+
 ### Added
 
 - **End-to-end walkthrough** (`test/e2e/walkthrough.e2e.js`). Starts both
