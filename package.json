@@ -48,6 +48,7 @@
     "test:all": "cd test && node --test",
     "test:e2e": "node --test test/e2e/walkthrough.e2e.js",
     "demo": "node --test-reporter=spec test/e2e/walkthrough.e2e.js",
+    "demo:npm": "node --test-reporter=spec test/e2e/walkthrough.e2e.js --from-npm",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "example:basic": "node examples/basic-credential-stuffing/index.js",

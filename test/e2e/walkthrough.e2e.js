@@ -14,6 +14,8 @@
  *   DEMO_OPEN=0         do not open the HTML report at the end of a recording
  *   DEMO_LLM=anthropic  act 3 uses a real model (needs ANTHROPIC_API_KEY); its
  *                       outcome is shown but not asserted, since a model may choose differently
+ *   FRAUD_SIM_SOURCE=npm  run the published package instead of this repository
+ *                       (FRAUD_SIM_VERSION pins it) — see helpers/source.js
  */
 
 import { test, before, after } from 'node:test';
@@ -23,9 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
-import { run } from '../../src/index.js';
-import { httpAdapter } from '../../src/adapters/http.js';
-import { anthropic } from '../../src/llm/anthropic.js';
+import { loadFraudSim } from './helpers/source.js';
 import { startTarget, freePort, ENDPOINTS } from './helpers/targets.js';
 import { act, say, verdict, cli, pause, log, c, DECISION_COLOUR, RECORDING } from './helpers/narrate.js';
 
@@ -35,6 +35,9 @@ const REPORT = join(REPORT_DIR, 'assessment.html');
 
 let simple;
 let hardened;
+/** The fraud-sim under test: this repository, or the package from npm. */
+let fs;
+const fraudSim = (args) => cli(args, fs.cli);
 
 const endpointFlags = [
   '--endpoint-login', ENDPOINTS.login,
@@ -44,8 +47,10 @@ const endpointFlags = [
 
 before(async () => {
   mkdirSync(REPORT_DIR, { recursive: true });
+  fs = await loadFraudSim();
   log(`
   ${c.bold('fraud-sim')} — synthetic attacks and real customers, against a real fraud engine`);
+  log(`  ${c.dim(fs.from === 'npm' ? `fraud-sim ${fs.version}, installed from npm` : `fraud-sim ${fs.version}, from this repository`)}`);
   log(`  ${c.dim('Two practice engines run as real HTTP servers: a simple one and a hardened one.')}`);
   await pause(2);
 });
@@ -64,11 +69,11 @@ after(() => {
 async function fresh(name) {
   if (name === 'simple') {
     simple?.stop();
-    simple = await startTarget('simple');
+    simple = await startTarget('simple', fs.root);
     return simple;
   }
   hardened?.stop();
-  hardened = await startTarget('hardened');
+  hardened = await startTarget('hardened', fs.root);
   return hardened;
 }
 
@@ -80,7 +85,7 @@ test('act 1: a credential-stuffing botnet is contained', async () => {
     Many IPs, many accounts, the commonest account-takeover attack there is.
     Target: the simple practice engine.`);
 
-  const { code, stdout } = await cli([
+  const { code, stdout } = await fraudSim([
     'run', 'credential-stuffing',
     '--target-url', simple.url, ...endpointFlags,
     '--option', 'delayMs=0',
@@ -118,7 +123,7 @@ test('act 3: a smarter attacker finds the gap the hardened engine leaves', async
     The hardened engine remembers a challenged device as seen, not as bad.
     ${useLlm ? 'Attacker: Claude, reasoning from the decisions it gets back.' : 'Attacker: a scripted stand-in for an LLM, so this test is deterministic.'}`);
 
-  const llm = useLlm ? anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : replayChallengedDevice();
+  const llm = useLlm ? fs.anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : replayChallengedDevice();
   const report = await attackRounds(hardened, 'victim_002', llm);
 
   if (useLlm) {
@@ -137,7 +142,7 @@ test('act 4: ordinary customers get through the hardened engine', async () => {
     Blocking everything gives a perfect block rate. So fraud-sim also sends
     ordinary customers: routine logins, new phones, travel, payments.`);
 
-  const { code, stdout } = await cli([
+  const { code, stdout } = await fraudSim([
     'run', 'legitimate-users',
     '--target-url', hardened.url, ...endpointFlags,
     '--max-false-positives', '2',
@@ -157,7 +162,7 @@ test('act 5: the full assessment, gated like CI would gate it', async () => {
     All ten attacks plus customer traffic against the simple engine.
     Gate: block at least 85% of attacks AND block no more than 2% of customers.`);
 
-  const { code, stdout } = await cli([
+  const { code, stdout } = await fraudSim([
     'suite', '--all',
     '--target-url', simple.url, ...endpointFlags,
     '--option', 'delayMs=0',
@@ -192,7 +197,7 @@ test('act 6: a target that is down is not reported as a weak defence', async () 
     A broken staging box must not look like a weak defence, or a strong one.
     Exit 1 means fix the rules. Exit 3 means fix the environment.`);
 
-  const { code, stderr } = await cli([
+  const { code, stderr } = await fraudSim([
     'run', 'credential-stuffing',
     '--target-url', `http://127.0.0.1:${deadPort}`, ...endpointFlags,
     '--option', 'attackerCount=2',
@@ -212,11 +217,11 @@ test('act 6: a target that is down is not reported as a weak defence', async () 
 
 /** Run the adaptive attacker through the library, printing each round. */
 async function attackRounds(target, victim, llm) {
-  const adapter = httpAdapter({ baseUrl: target.url, endpoints: { scoreLogin: ENDPOINTS.login } });
+  const adapter = fs.httpAdapter({ baseUrl: target.url, endpoints: { scoreLogin: ENDPOINTS.login } });
   let reasoning = '';
   const rounds = [];
 
-  const report = await run('adaptive-attacker', {
+  const report = await fs.run('adaptive-attacker', {
     target: adapter,
     llm,
     options: { targetUserId: victim, maxRounds: 8, delayMs: 0 },

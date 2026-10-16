@@ -8,6 +8,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -99,13 +100,15 @@ function quoteForShow(arg) {
  * returning it for assertions. No shell is involved, so no path mangling.
  *
  * @param {string[]} args
+ * @param {string} [cliPath] - The CLI to run: this repository's by default,
+ *   or the one in a copy installed from npm.
  * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
  */
-export async function cli(args) {
+export async function cli(args, cliPath = join(ROOT, CLI)) {
   await typeCommand(args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI, ...args], { cwd: ROOT });
+    const child = spawn(process.execPath, [cliPath, ...args], { cwd: ROOT });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => {

@@ -41,16 +41,18 @@ export function freePort() {
  * Start a practice target and wait until it answers its health check.
  *
  * @param {'simple'|'hardened'} name
+ * @param {string} [root] - The fraud-sim whose examples/ to run: this
+ *   repository by default, or a copy installed from npm.
  * @returns {Promise<{ name: string, url: string, stop: () => void }>}
  */
-export async function startTarget(name) {
+export async function startTarget(name, root = ROOT) {
   const script = SERVERS[name];
   if (!script) throw new Error(`Unknown practice target "${name}"`);
 
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [script], {
-    cwd: ROOT,
+    cwd: root,
     env: { ...process.env, PORT: String(port) },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
