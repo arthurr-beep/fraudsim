@@ -1,6 +1,6 @@
 {
   "name": "fraud-sim",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Realistic synthetic attack traffic for testing fintech fraud detection systems",
   "type": "module",
   "main": "src/index.js",

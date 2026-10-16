@@ -8,8 +8,8 @@
  *
  * Exit codes are the contract with CI:
  *   0  ran, and the gate passed (or no gate was set)
- *   1  ran, and the gate failed — an attack succeeded, or a block rate was
- *      below --fail-under
+ *   1  ran, and the gate failed — an attack succeeded, a block rate was
+ *      below --fail-under, or too many legitimate customers were blocked
  *   2  usage error — bad flags, unknown scenario
  *   3  the run itself failed, or the target was too unreliable to measure
  *
@@ -24,7 +24,7 @@ import { run, runSuite, listScenarios, resolveLocale, localeIds } from '../src/i
 import { httpAdapter } from '../src/adapters/http.js';
 import { generateReport, summarise } from '../src/reporting/index.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 
 const FORMAT_BY_EXT = {
   '.html': 'html',
@@ -88,6 +88,7 @@ async function cmdRun(flags) {
   }
 
   resolveMarket(flags); // fail on a bad country code before sending anything
+  assertFalsePositiveGateMeasurable([scenarioId], flags);
   const target = buildTarget(flags);
   const report = await run(scenarioId, {
     target,
@@ -117,6 +118,7 @@ async function cmdSuite(flags) {
   }
 
   resolveMarket(flags); // fail on a bad country code before sending anything
+  assertFalsePositiveGateMeasurable(ids, flags);
   const target = buildTarget(flags);
   const result = await runSuite({
     name: flags.name ?? 'fraud-sim suite',
@@ -215,6 +217,23 @@ function resolveMarket(flags) {
   }
 }
 
+/**
+ * A false-positive gate over a run with no legitimate traffic would pass by
+ * default — zero customers, zero refused. Refuse it before anything is sent.
+ */
+function assertFalsePositiveGateMeasurable(ids, flags) {
+  if (!Number.isFinite(flags['max-false-positives'])) return;
+  const legitimate = listScenarios()
+    .filter((s) => s.traffic === 'legitimate')
+    .map((s) => s.id);
+  if (!ids.some((id) => legitimate.includes(id))) {
+    throw usage(
+      '--max-false-positives needs legitimate traffic in the run. ' +
+        `Use suite --all, or include ${legitimate.join(', ')} in --scenarios.`
+    );
+  }
+}
+
 function buildTarget(flags) {
   if (!flags['target-url']) {
     throw usage('--target-url is required (e.g. --target-url https://api.example.com)');
@@ -306,6 +325,7 @@ function finish(reports, flags, name) {
     market: market.id,
     failUnder: flags['fail-under-each'] ?? flags['fail-under'],
     failUnderScope: flags['fail-under-each'] != null ? 'scenario' : 'overall',
+    maxFalsePositiveRate: flags['max-false-positives'],
     suiteName: name,
   };
 
@@ -323,12 +343,14 @@ function finish(reports, flags, name) {
   }
 
   const { totals } = summarise(reports, reportOptions);
+  const legit = totals.legitimate;
 
   // An unmeasurable run must not be reported as either a pass or a failure of
   // the defence — it is an environment problem.
-  if (totals.errorRate > 0.05) {
+  const unreliable = Math.max(totals.errorRate, legit?.errorRate ?? 0);
+  if (unreliable > 0.05) {
     process.stderr.write(
-      `  ${(totals.errorRate * 100).toFixed(1)}% of attempts never received a decision. ` +
+      `  ${(unreliable * 100).toFixed(1)}% of attempts never received a decision. ` +
         'The target was unreliable, so this run does not measure the defence.\n\n'
     );
     process.exit(3);
@@ -351,8 +373,27 @@ function finish(reports, flags, name) {
     );
   }
 
+  // Blocking good customers is a failure of the defence too — the half of the
+  // measurement a block rate cannot see. Gated only when asked, because every
+  // real engine refuses some customers and the acceptable share is a policy.
+  if (
+    Number.isFinite(flags['max-false-positives']) &&
+    legit &&
+    legit.falsePositiveRate > flags['max-false-positives']
+  ) {
+    failures.push(
+      `false-positive rate ${(legit.falsePositiveRate * 100).toFixed(1)}% is above the ` +
+        `${(flags['max-false-positives'] * 100).toFixed(1)}% ceiling ` +
+        `(${legit.customersBlocked} of ${legit.customers} customers refused)`
+    );
+  }
+
   if (Number.isFinite(flags['fail-under-each'])) {
-    const below = reports.filter((r) => r.blockRate < flags['fail-under-each']);
+    // Attack scenarios only: a block-rate floor on legitimate traffic would
+    // demand that good customers be refused.
+    const below = reports.filter(
+      (r) => r.traffic !== 'legitimate' && r.blockRate < flags['fail-under-each']
+    );
     if (below.length) {
       failures.push(
         `${below.length} scenario(s) below the per-scenario ${(flags['fail-under-each'] * 100).toFixed(0)}% floor: ` +
@@ -376,6 +417,7 @@ const NUMERIC = new Set([
   'timeout',
   'fail-under',
   'fail-under-each',
+  'max-false-positives',
   'users',
 ]);
 const REPEATABLE = new Set(['header', 'option', 'block-on-status']);
@@ -429,6 +471,10 @@ function parseFlags(argv) {
   // A percentage is friendlier to type than a fraction, so accept both.
   for (const key of ['fail-under', 'fail-under-each']) {
     if (flags[key] > 1) flags[key] = flags[key] / 100;
+  }
+  // A 100% false-positive ceiling gates nothing, so 1 here means 1%, not 1.0.
+  if (flags['max-false-positives'] >= 1) {
+    flags['max-false-positives'] = flags['max-false-positives'] / 100;
   }
 
   return flags;
@@ -544,8 +590,13 @@ const HELP = `
                                 the victim's own legitimate traffic, so a low
                                 block rate there is correct rather than a failure.
 
+    --max-false-positives <r>   Exit 1 if more than this share of LEGITIMATE
+                                customer events were blocked (accepts 0.02 or 2).
+                                Needs legitimate-users in the run; suite --all
+                                includes it.
+
     An attack that reaches its objective always fails the run, with or without
-    either flag.
+    these flags.
 
   EXIT CODES
     0  gate passed        2  usage error
@@ -561,7 +612,7 @@ const HELP = `
 
     fraud-sim suite --all \\
       --target-url https://staging.example.com \\
-      --seed 42 --report assessment.html --fail-under 85
+      --seed 42 --report assessment.html --fail-under 85 --max-false-positives 2
 
 `;
 // Invoked last on purpose: the flag tables above are module-level `const`,

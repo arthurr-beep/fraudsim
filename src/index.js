@@ -21,6 +21,7 @@
 import { Runner, DEFAULT_MAX_REQUESTS_PER_SECOND } from './runner.js';
 import { scenarios as builtInScenarios } from './scenarios/index.js';
 import { rateLimiter } from './utils/throttle.js';
+import { legitimateTotalsFor } from './reporting/aggregate.js';
 
 /**
  * The fixed attacker IP pool, with declared geolocation and reputation.
@@ -185,6 +186,7 @@ export function listScenarios() {
     id: s.id,
     name: s.name,
     description: s.description,
+    traffic: s.traffic ?? 'attack',
     defaultOptions: s.defaultOptions,
   }));
 }
@@ -225,9 +227,16 @@ function validateScenario(scenario) {
   if (scenario.defaultOptions && typeof scenario.defaultOptions !== 'object') {
     throw new Error('Scenario.defaultOptions must be an object.');
   }
+  if (scenario.traffic != null && !['attack', 'legitimate'].includes(scenario.traffic)) {
+    throw new Error(`Scenario.traffic must be "attack" or "legitimate", received: "${scenario.traffic}".`);
+  }
 }
 
 function aggregateReports(reports) {
+  // Attack and legitimate traffic answer opposite questions — a block is a
+  // catch on one and a false positive on the other — so they are never summed.
+  const attacks = reports.filter((r) => r.traffic !== 'legitimate');
+
   const totals = {
     attempts: 0,
     blocked: 0,
@@ -235,7 +244,7 @@ function aggregateReports(reports) {
     allowed: 0,
     errors: 0,
   };
-  for (const r of reports) {
+  for (const r of attacks) {
     totals.attempts += r.attempts ?? 0;
     totals.blocked += r.blocked ?? 0;
     totals.stepUp += r.stepUp ?? 0;
@@ -254,5 +263,6 @@ function aggregateReports(reports) {
     blockRate: scoredAttempts > 0 ? totals.blocked / scoredAttempts : 0,
     stepUpRate: scoredAttempts > 0 ? totals.stepUp / scoredAttempts : 0,
     errorRate: totals.attempts > 0 ? totals.errors / totals.attempts : 0,
+    legitimate: legitimateTotalsFor(reports),
   };
 }

@@ -21,13 +21,23 @@ export function normaliseInput(result) {
   );
 }
 
+/** True for traffic a defence should let through — see legitimate-users. */
+export function isLegitimate(report) {
+  return report?.traffic === 'legitimate';
+}
+
 /**
- * Totals across every scenario, using the same denominator rule as a single
- * run: rates are over attempts that actually received a decision.
+ * Totals across every attack scenario, using the same denominator rule as a
+ * single run: rates are over attempts that actually received a decision.
+ *
+ * Legitimate traffic is kept out of these figures and summarised under
+ * `legitimate` instead. A blocked customer added to the block rate would make
+ * a defence look better the more good customers it refused.
  */
 export function totalsFor(reports) {
+  const attacks = reports.filter((r) => !isLegitimate(r));
   const t = { attempts: 0, blocked: 0, stepUp: 0, allowed: 0, errors: 0 };
-  for (const r of reports) {
+  for (const r of attacks) {
     t.attempts += r.attempts ?? 0;
     t.blocked += r.blocked ?? 0;
     t.stepUp += r.stepUp ?? 0;
@@ -44,11 +54,50 @@ export function totalsFor(reports) {
     stepUpRate: scoredAttempts > 0 ? t.stepUp / scoredAttempts : 0,
     allowRate: scoredAttempts > 0 ? t.allowed / scoredAttempts : 0,
     errorRate: t.attempts > 0 ? t.errors / t.attempts : 0,
-    scenarios: reports.length,
-    attacksSucceeded: reports.filter((r) => r.attackerSucceeded === true).length,
-    estimatedLossMinor: reports.reduce((a, r) => a + lossOf(r), 0),
+    scenarios: attacks.length,
+    attacksSucceeded: attacks.filter((r) => r.attackerSucceeded === true).length,
+    estimatedLossMinor: attacks.reduce((a, r) => a + lossOf(r), 0),
     // Retained for callers written against the naira-specific name.
-    estimatedLossKobo: reports.reduce((a, r) => a + lossOf(r), 0),
+    estimatedLossKobo: attacks.reduce((a, r) => a + lossOf(r), 0),
+    legitimate: legitimateTotalsFor(reports),
+  };
+}
+
+/**
+ * What the defence cost ordinary customers, or `null` when the run included
+ * no legitimate traffic — absent is different from zero, and a report should
+ * never claim "no false positives" for a run that could not have seen any.
+ */
+export function legitimateTotalsFor(reports) {
+  const legit = reports.filter(isLegitimate);
+  if (legit.length === 0) return null;
+
+  const t = { attempts: 0, blocked: 0, stepUp: 0, allowed: 0, errors: 0 };
+  let customers = 0;
+  let customersBlocked = 0;
+  let valueBlockedMinor = 0;
+  for (const r of legit) {
+    t.attempts += r.attempts ?? 0;
+    t.blocked += r.blocked ?? 0;
+    t.stepUp += r.stepUp ?? 0;
+    t.allowed += r.allowed ?? 0;
+    t.errors += r.errors ?? 0;
+    customers += r.customers ?? 0;
+    customersBlocked += r.customersBlocked ?? 0;
+    valueBlockedMinor += r.valueBlockedMinor ?? 0;
+  }
+
+  const scoredAttempts = Math.max(0, t.attempts - t.errors);
+
+  return {
+    ...t,
+    scoredAttempts,
+    falsePositiveRate: scoredAttempts > 0 ? t.blocked / scoredAttempts : 0,
+    frictionRate: scoredAttempts > 0 ? (t.blocked + t.stepUp) / scoredAttempts : 0,
+    errorRate: t.attempts > 0 ? t.errors / t.attempts : 0,
+    customers,
+    customersBlocked,
+    valueBlockedMinor,
   };
 }
 
@@ -97,6 +146,20 @@ export function lossOf(report) {
 }
 
 export function outcomeFor(report) {
+  // Legitimate traffic reads the other way round: a block is the failure.
+  if (isLegitimate(report)) {
+    if (report.errorRate > 0.05) {
+      return { kind: 'unreliable', label: 'Run unreliable', severity: 'unknown' };
+    }
+    if (report.blocked > 0) {
+      return { kind: 'false-positives', label: 'Customers blocked', severity: 'high' };
+    }
+    if (report.stepUp > 0) {
+      return { kind: 'friction', label: 'Challenged, none blocked', severity: 'ok' };
+    }
+    return { kind: 'clean', label: 'No friction', severity: 'ok' };
+  }
+
   if (lossOf(report) > 0) {
     return { kind: 'loss', label: 'Value extracted', severity: 'critical' };
   }
@@ -130,6 +193,49 @@ export function findingsFor(reports, options = {}) {
 
   for (const r of reports) {
     const outcome = outcomeFor(r);
+
+    if (outcome.kind === 'false-positives') {
+      const stats = [
+        ['customer events', r.scoredAttempts],
+        ['blocked', r.blocked],
+        ['false-positive rate', pct(r.falsePositiveRate ?? r.blockRate)],
+        ['customers refused', `${r.customersBlocked ?? '—'} of ${r.customers ?? '—'}`],
+      ];
+      if (r.valueBlockedMinor > 0) stats.push(['payments refused', money(r.valueBlockedMinor)]);
+      for (const [stage, row] of Object.entries(r.byStage ?? {})) {
+        if (row.blocked > 0) stats.push([`blocked on ${stage}`, `${row.blocked} of ${row.events}`]);
+      }
+      const reasons = Object.keys(r.falsePositiveReasons ?? {}).slice(0, 3);
+      if (reasons.length) stats.push(['top reasons', reasons.join(', ')]);
+
+      // Customer sessions are days apart on the event clock but arrive within
+      // seconds. A windowed rule that counts arrivals sees a burst, so a
+      // velocity block here may be the compression, not the customer.
+      const windowed = Object.keys(r.falsePositiveReasons ?? {}).filter((code) =>
+        /VELOCITY|RATE|FREQUENCY|BURST/i.test(code)
+      );
+      const caveat =
+        r.simulatedTime && windowed.length
+          ? ` Caveat: ${windowed.join(', ')} count events in a time window, and this traffic ` +
+            `spans ${r.simulatedSpan ?? 'days'} of event time delivered in seconds. If the target ` +
+            'windows on arrival time rather than the event timestamp, those blocks are the ' +
+            "simulator's compression, not customer behaviour."
+          : '';
+      if (caveat) stats.push(['simulated span', r.simulatedSpan ?? '—']);
+
+      findings.push({
+        severity: 'high',
+        scenario: r.scenarioId,
+        title: 'Legitimate customers were blocked',
+        detail:
+          `${r.blocked} of ${r.scoredAttempts} ordinary customer events were refused ` +
+          `(${pct(r.falsePositiveRate ?? r.blockRate)}). Every one is a real customer locked ` +
+          'out of their own account — the cost a block rate never shows.' +
+          caveat,
+        stats,
+      });
+      continue;
+    }
 
     if (outcome.kind === 'loss') {
       findings.push({

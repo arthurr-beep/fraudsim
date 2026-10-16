@@ -382,6 +382,41 @@ actually have. Uses a simulated clock — see the note at the top of this sectio
 
 ---
 
+## Available in v0.5 — legitimate traffic
+
+### legitimate-users
+
+**What it simulates:** Not an attack. Ordinary customers, each with one
+device, one browser, their own home address in a domestic city, and two payees
+they already pay. After a warm-up that gives them history, each runs a number
+of sessions spread across days: mostly routine logins, sometimes from a new
+phone or from abroad, about half of them followed by a payment — usually to a
+known payee, occasionally a small first payment to someone new.
+
+**What a good defence does:** allows routine logins and payments to known
+payees; may challenge a new phone, a login from abroad, or a first payment to a
+new payee; blocks none of it. Every `BLOCK` is a false positive.
+
+**Common reasons it gets blocked anyway:**
+- Velocity rules counted on arrival time rather than the event timestamp — the
+  customers' week arrives in seconds. The finding flags this case.
+- "New device" weighted high enough to block on its own, or combined with any
+  second weak signal.
+- Geo or IP-reputation rules that treat a residential foreign network as hostile.
+- New-payee rules with an amount threshold below ordinary first payments.
+
+**Options:** `targetUserIds` (required, one per customer), `warmupLogins`,
+`sessionsPerUser`, `sessionGapHours`, `withdrawalRate`, `newDeviceRate`,
+`travelRate`, `newPayeeRate`, `amountMinor`, `delayMs`.
+
+**Report fields:** `falsePositiveRate`, `frictionRate`, `customers`,
+`customersBlocked`, `valueBlockedMinor`, `byStage` (per behaviour: events,
+allowed, stepUp, blocked), `falsePositiveReasons`, `warmup`, `simulatedTime`,
+`simulatedSpan`. The report carries `traffic: 'legitimate'`, which keeps it out
+of every attack total.
+
+---
+
 ## Contributing a new scenario
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the contribution process. The short version: open an issue describing the attack pattern first, get approval, then submit a PR using the existing scenarios as a template.

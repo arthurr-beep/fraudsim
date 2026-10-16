@@ -22,6 +22,7 @@ import {
   latencyFor,
   outcomeFor,
   findingsFor,
+  isLegitimate,
   pct,
   fmtMs,
 } from './aggregate.js';
@@ -43,6 +44,8 @@ export function renderHtml(result, options = {}) {
 
   const money = (minor) => formatMoney(minor, options);
   const totals = totalsFor(reports);
+  const legit = totals.legitimate;
+  const customerIds = reports.filter(isLegitimate).map((r) => r.scenarioId);
   const findings = findingsFor(reports, options);
   const reasons = reasonFrequency(reports);
   const latency = latencyFor(reports);
@@ -75,6 +78,11 @@ export function renderHtml(result, options = {}) {
       ${totals.estimatedLossMinor > 0
         ? `It blocked ${pct(totals.blockRate)} of what was thrown at it — and still let ${esc(money(totals.estimatedLossMinor))} through.`
         : `It blocked ${pct(totals.blockRate)} of what was thrown at it.`}
+      ${legit
+        ? legit.blocked > 0
+          ? `It also refused ${pct(legit.falsePositiveRate)} of ordinary customer activity — ${legit.customersBlocked} of ${legit.customers} customers locked out at least once.`
+          : `It let every ordinary customer through${legit.stepUp > 0 ? `, challenging ${pct(legit.stepUp / Math.max(1, legit.scoredAttempts))} of their activity` : ''}.`
+        : ''}
     </p>
 
     <dl class="meta">
@@ -105,6 +113,16 @@ export function renderHtml(result, options = {}) {
         totals.estimatedLossMinor > 0 ? 'Summed across every scenario that reached money.' : 'No scenario reached money.',
         totals.estimatedLossMinor > 0)}
     </div>
+    ${legit ? `
+    <h3 class="sub">What it cost ordinary customers</h3>
+    <div class="tiles">
+      ${tile('False-positive rate', pct(legit.falsePositiveRate), `${legit.blocked} of ${legit.scoredAttempts} legitimate events blocked.`, legit.blocked > 0)}
+      ${tile('Friction', pct(legit.frictionRate), `${legit.stepUp + legit.blocked} legitimate events challenged or blocked.`)}
+      ${tile('Customers refused', `${legit.customersBlocked} of ${legit.customers}`, 'Customers blocked at least once.', legit.customersBlocked > 0)}
+      ${tile('Payments refused', legit.valueBlockedMinor > 0 ? esc(money(legit.valueBlockedMinor)) : '—',
+        legit.valueBlockedMinor > 0 ? "Customers' own payments to people they pay." : 'No legitimate payment was refused.',
+        legit.valueBlockedMinor > 0)}
+    </div>` : ''}
   </section>
 
   ${findings.length ? `
@@ -149,7 +167,9 @@ export function renderHtml(result, options = {}) {
     </div>
     <p class="footnote">Counts are events, not attacks. Some scenarios include the victim's own
     legitimate activity, so an allowed event is not automatically a miss — the outcome column
-    reads the attack rather than the arithmetic.</p>
+    reads the attack rather than the arithmetic.${legit ? ` On legitimate traffic
+    (<span class="mono">${customerIds.map(esc).join('</span>, <span class="mono">')}</span>) the
+    colours invert: a blocked customer is shown red and an allowed one green.` : ''}</p>
   </section>
 
   ${reasons.length ? `
@@ -215,11 +235,16 @@ function renderRow(r) {
   const total = Math.max(1, r.blocked + r.stepUp + r.allowed);
   const seg = (n, cls) =>
     n > 0 ? `<span class="${cls}" style="flex:${n}" title="${n} of ${total}"></span>` : '';
+  // Decision colour is status colour: for a real customer a block is the bad
+  // outcome, so the hues swap rather than reading a refusal as a win.
+  const legitimate = isLegitimate(r);
+  const blockedCls = legitimate ? 'seg-allowed' : 'seg-blocked';
+  const allowedCls = legitimate ? 'seg-blocked' : 'seg-allowed';
 
   return `<tr>
     <td class="scenario-name"><span class="mono">${esc(r.scenarioId)}</span></td>
     <td class="n">${r.attempts}</td>
-    <td><div class="bar">${seg(r.blocked, 'seg-blocked')}${seg(r.stepUp, 'seg-challenged')}${seg(r.allowed, 'seg-allowed')}</div></td>
+    <td><div class="bar">${seg(r.blocked, blockedCls)}${seg(r.stepUp, 'seg-challenged')}${seg(r.allowed, allowedCls)}</div></td>
     <td class="n">${r.blocked}</td>
     <td class="n">${r.stepUp}</td>
     <td class="n">${r.allowed}</td>
@@ -310,6 +335,7 @@ h2{font-size:clamp(24px,3.4vw,31px);letter-spacing:-.012em}
 h3{font-size:18px}
 .prose{color:var(--ink-2)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:16px}
+h3.sub{margin:32px 0 16px;color:var(--ink-2)}
 .tile{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:20px 22px 22px;display:flex;flex-direction:column;gap:6px;box-shadow:var(--shadow)}
 .tile .label{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 .tile .value{font-family:"IBM Plex Mono",monospace;font-size:38px;font-weight:500;line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}

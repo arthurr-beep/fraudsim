@@ -137,6 +137,9 @@ export class Runner {
     const merged = {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
+      // 'attack' or 'legitimate'. Reporting reads a block as a success on one
+      // and a false positive on the other, so every report has to say which.
+      traffic: scenario.traffic ?? 'attack',
       startedAt,
       completedAt: Date.now(),
       durationMs: Date.now() - startedAt,

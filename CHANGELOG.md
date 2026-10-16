@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — False positives, markets, a harder target — 2026-10-16
+
+The first npm release since 0.2.0. Versions 0.3.0 and 0.4.0 below were tagged
+in this changelog but never published, so everything from them ships here.
+
+### Added — the other half of the measurement
+
+- **`legitimate-users` scenario.** Ordinary customers, not an attack: routine
+  logins, a new phone, travel, payments to known payees and the occasional new
+  one. Every block it receives is a false positive, every step-up is friction.
+  Until now a defence that blocked everything scored a perfect run.
+
+  Built so the simulator does not manufacture the false positives it reports:
+  a warm-up gives each customer history before anything is measured (reported
+  separately, excluded from the rates); each customer has their own home
+  address, so users-per-IP rules cannot fire on crowding the simulator caused;
+  sessions are spread across days on the event clock; customers only use
+  browser user agents.
+- **Reports keep the two halves apart.** Attack totals, block rates and
+  `--fail-under` cover attack scenarios only. Legitimate traffic is summarised
+  under `totals.legitimate` (`falsePositiveRate`, `frictionRate`,
+  `customersBlocked`, `valueBlockedMinor`), in every format: its own table in
+  the terminal, a customer-impact panel in HTML with the bar colours inverted,
+  JUnit failures of type `FalsePositives`, and a high-severity finding that
+  names the stages and reason codes doing the blocking. When those reasons are
+  velocity rules on time-compressed traffic, the finding says the block may be
+  the simulator's clock rather than the customer.
+- **`--max-false-positives <rate>`** on the CLI: exit 1 when more than that
+  share of customer events was blocked. Refused up front if the run contains no
+  legitimate traffic, because the gate would otherwise pass on zero customers.
+- Every report and `listScenarios()` entry now carries
+  `traffic: 'attack' | 'legitimate'`. Custom scenarios may declare `traffic`;
+  it defaults to `'attack'`.
+
+### Fixed — the adaptive attacker could not replay a device
+
+- The history given to the LLM recorded the parameters a strategy *asked for*,
+  not the payload actually sent. Round 1 never names a fingerprint, so the model
+  saw `null` and could never replay the device the defender had challenged —
+  the exact gap the hardened practice target leaves for a smarter attacker.
+  History and `strategyHistory` now record the IP, user agent and fingerprint
+  that were sent.
+- `parameters` was declared inside the round loop, so a key the strategy
+  omitted was silently re-randomised every round instead of kept. Omitting a
+  key now means "keep it".
+- The OpenAI and Anthropic prompts now list the parameters the attacker
+  controls and say that history shows exactly what was sent.
+
+### Changed
+
+- `suite --all` runs `legitimate-users` first, before any attack has burned
+  shared state (blocked IPs, blocked devices) on the target.
+- README no longer claims the library benchmarks third-party vendors such as
+  Stripe Radar. It exercises the rules behind your own scoring API; synthetic
+  payloads say little about a vendor's ML, device SDK or consortium data.
+
 ### Added — a target that makes the attacker work
 
 - **Hardened example target** (`examples/express-hardened-target`, port 4001)

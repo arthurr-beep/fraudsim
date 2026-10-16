@@ -17,6 +17,11 @@
  *   - sim-swap-takeover
  *   - velocity-evasion
  *
+ * v0.5 adds the other half of the measurement:
+ *   - legitimate-users — ordinary customers, not an attack. Every block it
+ *     receives is a false positive. Listed first so a suite measures customers
+ *     before its own attacks have burned any shared state on the target.
+ *
  * Endpoint requirements differ by scenario. `credential-stuffing`,
  * `account-drain`, `adaptive-attacker`, `slow-drain` and `velocity-evasion`
  * need only `scoreLogin` / `scoreWithdrawal`. `card-testing`, `promo-abuse` and
@@ -24,6 +29,7 @@
  * message if the adapter does not implement what it needs.
  */
 
+import legitimateUsers from './legitimate-users.js';
 import credentialStuffing from './credential-stuffing.js';
 import accountDrain from './account-drain.js';
 import adaptiveAttacker from './adaptive-attacker.js';
@@ -36,6 +42,7 @@ import simSwapTakeover from './sim-swap-takeover.js';
 import velocityEvasion from './velocity-evasion.js';
 
 export const scenarios = [
+  legitimateUsers,
   credentialStuffing,
   accountDrain,
   adaptiveAttacker,

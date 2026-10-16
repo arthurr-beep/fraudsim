@@ -9,9 +9,9 @@
 [![secret-scan](https://github.com/arthurr-beep/fraudsim/workflows/secret-scan/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
 
-`fraud-sim` is a target-agnostic library for generating realistic fraud attack traffic — credential stuffing, account takeovers, card testing, and LLM-driven adaptive attackers — against any fraud detection system you want to evaluate.
+`fraud-sim` is a target-agnostic library for generating realistic fraud attack traffic — credential stuffing, account takeovers, card testing, and LLM-driven adaptive attackers — against any fraud detection system you want to evaluate. Alongside the attacks it sends ordinary customer traffic, so every run measures both what your defence stops and who it wrongly locks out.
 
-You build the defence. We bring the adversary.
+You build the defence. We bring the adversary — and the customers.
 
 ```js
 import { run, httpAdapter } from 'fraud-sim';
@@ -38,7 +38,9 @@ Every team building fraud detection needs to answer one question: *does it actua
 
 The honest ways to find out are limited. You can wait for real attackers (expensive in losses, slow in feedback). You can write throwaway shell scripts (different per engineer, never reused, never reviewed). You can buy proprietary attack libraries from vendors (closed, locked to one product, often years out of date).
 
-`fraud-sim` is the open alternative: a maintained, scenario-extensible library that any team can point at any target. Test your in-house rules engine. Benchmark Stripe Radar. Compare two vendors side by side. Run it in CI to catch regressions when you change a threshold.
+`fraud-sim` is the open alternative: a maintained, scenario-extensible library for teams that run their own scoring API. Regression-test your rules engine in CI, so a threshold change that lets card testing through — or starts locking out customers who bought a new phone — fails the build instead of reaching production.
+
+Be clear about what it measures. Payloads are synthetic: fingerprints, IPs and amounts are generated, not captured from real devices or real fraud. That exercises the rules and thresholds behind your API. It does not exercise client-side device intelligence, behavioural biometrics or consortium data, and pointing it at a third-party vendor's production model would tell you little and probably breach their terms.
 
 It works against any HTTP API. It uses no real fraud data. It includes an LLM-powered adaptive attacker that learns from your blocks and changes strategy mid-attack — because real attackers do exactly that.
 
@@ -47,6 +49,7 @@ It works against any HTTP API. It uses no real fraud data. It includes an LLM-po
 ## What it does
 
 - **10 attack scenarios** — credential stuffing, account drain, card testing, promo abuse, mule networks, slow drain, session hijack, SIM swap takeover, velocity evasion, and the LLM-driven adaptive attacker
+- **Legitimate customer traffic** — ordinary logins, new phones, travel and payments, so a run reports its false-positive rate next to its block rate. A defence that blocks everything scores 100% on attacks and fails here
 - **Target-agnostic** — works against any REST API via a configurable adapter
 - **LLM-driven adaptive attacker** — bring your own OpenAI, Anthropic, or local model. A deterministic fallback works without any LLM
 - **Structured event stream** — every action emits a typed event. Pipe it to a dashboard, log it, or stream it via Server-Sent Events
@@ -168,23 +171,39 @@ npx fraud-sim suite --all \
   --report assessment.html
 ```
 
-That writes a shareable HTML report and prints a summary:
+That writes a shareable HTML report and prints a summary. This one is the
+bundled simple practice target (`npm run example:mock-target`), seed 42:
 
 ```
   SCENARIO              EVENTS   BLOCK   CHALL   ALLOW     RATE  OUTCOME
   --------------------------------------------------------------------
   credential-stuffing      500     440      51       9    88.0%  Contained
-  card-testing              64      51       5       8    79.7%  Value extracted
+  card-testing              64      50       6       8    78.1%  Value extracted
   sim-swap-takeover          3       0       1       2     0.0%  Never blocked
   ...
 
-  TOTAL  675 events · 675 scored · 85.2% blocked · 0 errors
-  LOSS   NGN 606,000 extracted
+  TOTAL  675 events · 675 scored · 85.0% blocked · 0 errors
+  LOSS   $606,000 extracted
 
-  FINDINGS (7)
+  LEGITIMATE TRAFFIC    EVENTS   BLOCK   CHALL   ALLOW   FALSE+  OUTCOME
+  --------------------------------------------------------------------
+  legitimate-users          66      16      17      33    24.2%  Customers blocked
+
+  CUSTOMERS  66 events · 24.2% blocked (false positives) · 50.0% challenged or blocked · 11 of 12 customers refused
+
+  FINDINGS (8)
     [CRITICAL] card-testing — The attack reached money
-    [HIGH]     sim-swap-takeover — Nothing was ever blocked
+    [CRITICAL] promo-abuse — The attack reached money
+    [HIGH] legitimate-users — Legitimate customers were blocked
+    [HIGH] sim-swap-takeover — Nothing was ever blocked
+    ...
 ```
+
+The simple target looks respectable on attacks and then refuses one customer
+event in four. Most of those blocks cite velocity: that target counts logins by
+arrival time, and the customers' sessions are days apart on the event clock but
+arrive within seconds. The finding says so rather than presenting the figure as
+fact — see [Legitimate traffic](#legitimate-traffic-and-false-positives).
 
 `suite --all` synthesises the account identifiers each scenario needs, giving
 every scenario its own block so they do not contaminate each other's per-user
@@ -198,13 +217,18 @@ npx fraud-sim suite --all \
   --target-url "$STAGING_URL" \
   --seed 42 \
   --report junit.xml \
-  --fail-under 85
+  --fail-under 85 \
+  --max-false-positives 2
 ```
+
+`--fail-under` is the floor on attacks blocked; `--max-false-positives` is the
+ceiling on legitimate customer events blocked. Gate on both — either one alone
+can be passed by tuning the defence to the extreme.
 
 | Exit | Meaning |
 |---|---|
 | 0 | Ran, gate passed |
-| 1 | Ran, gate failed — an attack succeeded, or the block rate was below the floor |
+| 1 | Ran, gate failed — an attack succeeded, the block rate was below the floor, or the false-positive rate was above the ceiling |
 | 2 | Usage error |
 | 3 | The run failed, or the target was too unreliable to measure |
 
@@ -320,11 +344,13 @@ const llm = deterministic({ seed: 42 });
 
 ## The scenarios
 
-All ten are registered and runnable. `listScenarios()` returns the live list at
-runtime.
+Ten attack scenarios and one legitimate one are registered and runnable.
+`listScenarios()` returns the live list at runtime, each entry marked
+`traffic: 'attack'` or `traffic: 'legitimate'`.
 
 | ID | Needs | What it simulates |
 |---|---|---|
+| `legitimate-users` | login, withdrawal | **Not an attack.** Ordinary customers: routine logins, a new phone, travel, payments to known and new payees. Every block is a false positive |
 | `credential-stuffing` | login | A botnet replays a stolen credential dump across many IPs and many accounts |
 | `account-drain` | login, withdrawal | Attacker logs in from a new device, changes the password, and rapidly drains funds to new payees |
 | `adaptive-attacker` | login | An LLM-driven attacker that observes blocks and reason codes, then adapts its strategy |
@@ -340,7 +366,7 @@ The **Needs** column is the target methods each scenario calls: `login` is
 `scoreLogin`, `withdrawal` is `scoreWithdrawal`, `action` is `scoreAction`. A
 scenario throws a clear error if the adapter does not implement what it needs,
 so a target that only scores logins and withdrawals can still run seven of the
-ten.
+ten attacks, and the legitimate traffic.
 
 Four scenarios (`slow-drain`, `velocity-evasion`, `mule-network`, and the timing
 stages of `sim-swap-takeover`) advance the payload `timestamp` instead of
@@ -350,6 +376,48 @@ timestamp — if it stamps arrival time server-side, those runs measure a burst
 rather than the attack they describe.
 
 Each scenario has its own options and emits structured events you can subscribe to. See [`docs/ATTACK_PATTERNS.md`](docs/ATTACK_PATTERNS.md) for full details on each one.
+
+### Legitimate traffic and false positives
+
+A block rate on its own is easy to win: block everything and it reads 100%.
+`legitimate-users` is the other half of the measurement. It plays ordinary
+customers, each with one device, one browser, their own home address in a
+domestic city and a couple of payees they already pay. A block here is a real
+customer refused; a step-up is friction.
+
+```js
+const report = await run('legitimate-users', {
+  target,
+  options: { targetUserIds: customerIds }, // one id per customer
+  seed: 42,
+});
+
+report.falsePositiveRate; // blocked / scored customer events
+report.frictionRate;      // (blocked + challenged) / scored
+report.customersBlocked;  // customers refused at least once
+report.valueBlockedMinor; // customers' own payments refused
+report.byStage;           // routine-login, new-device-login, travel-login,
+                          // known-payee-withdrawal, new-payee-withdrawal
+```
+
+How it stays honest:
+
+- **Warm-up first.** Each customer logs in `warmupLogins` times before anything
+  is measured, because a real customer is not a stranger to your system. Warm-up
+  decisions are reported under `warmup` and excluded from the rates.
+- **Own addresses.** Every customer gets a distinct home IP, so a users-per-IP
+  rule cannot fire on traffic the simulator crowded onto one address.
+- **Days, not seconds.** Sessions are `sessionGapHours` apart on the event
+  clock. That is faithful only if your engine windows on the payload
+  `timestamp`. If it counts arrivals, it sees a burst, and the finding flags any
+  velocity reason among the blocks as possible compression rather than behaviour.
+- **Never mixed with attacks.** Suite totals, block rates and `--fail-under`
+  cover attack scenarios only. Customer traffic is summarised separately under
+  `totals.legitimate` in every report format.
+
+Tune the mix with `newDeviceRate`, `travelRate`, `withdrawalRate`,
+`newPayeeRate` and `amountMinor`. `suite --all` runs it first, before any attack
+has burned shared state on the target.
 
 List scenarios programmatically:
 
@@ -479,14 +547,16 @@ Round 3: LLM reasons: "IP is flagged as a proxy. Switching to a residential
          Attacker tries with a residential-looking IP.
          Target responds: BLOCK — reasons: ["LOGIN_VELOCITY_USER"]
 
-Round 4: LLM reasons: "Velocity threshold hit. I'll wait and reduce my pace."
-         Attacker waits 60 seconds, tries again with cleaner signals.
+Round 4: LLM reasons: "Velocity threshold hit. I'll rotate the IP and keep
+         the device that was only challenged."
          Target responds: BLOCK — reasons: ["IP_MANY_USERS"]
 
 ...
 ```
 
-**What the LLM sees:** the decision (`ALLOW`/`STEP_UP`/`BLOCK`), the reason codes (`NEW_DEVICE`, `IP_PROXY_VPN`, etc.), and the round number. Nothing else. It cannot see the target's rule weights, thresholds, or internal state.
+**What the LLM sees:** for every previous round, the exact `ip`, `userAgent` and `deviceFingerprint` that were sent, the decision (`ALLOW`/`STEP_UP`/`BLOCK`) and the reason codes (`NEW_DEVICE`, `IP_PROXY_VPN`, etc.). Nothing else. It cannot see the target's rule weights, thresholds, or internal state.
+
+**What it controls:** those three parameters, plus `delayMs`. A parameter it omits keeps its previous value, so reusing a device is a choice it can make. `delayMs` is recorded in the report but not enacted — the run is paced by the scenario's own `delayMs` option, so a ten-round attack does not take minutes.
 
 **Why this matters:** real attackers operate this way. They probe, learn, and adapt. A fraud system that catches a one-shot attack but fails against an adaptive adversary is not actually well-defended. The adaptive attacker exposes the difference.
 
@@ -507,6 +577,7 @@ import { runSuite } from 'fraud-sim';
 const result = await runSuite({
   name: 'monthly-benchmark',
   scenarios: [
+    { id: 'legitimate-users',    options: { targetUserIds: customerIds } },
     { id: 'credential-stuffing', options: { targetUserIds, attackerCount: 20 } },
     { id: 'account-drain',       options: { targetUserId: 'victim_001', withdrawalCount: 10 } },
     { id: 'adaptive-attacker',   options: { targetUserId: 'victim_001', maxRounds: 15 } },
@@ -515,7 +586,10 @@ const result = await runSuite({
 });
 
 console.log(result.aggregate);
-// → { attempts, blocked, stepUp, allowed, blockRate, stepUpRate }
+// → { attempts, blocked, stepUp, allowed, blockRate, stepUpRate,
+//     legitimate: { falsePositiveRate, frictionRate, customersBlocked, ... } }
+// Attack figures cover attack scenarios only; `legitimate` is null when the
+// suite included no legitimate traffic.
 
 for (const r of result.scenarioReports) {
   console.log(r.scenarioId, r.blockRate);
@@ -539,6 +613,10 @@ if (errorRate > 0.05) {
 
 if (blockRate < 0.85) {
   throw new Error(`Block rate regressed to ${blockRate} over ${scoredAttempts} scored attempts`);
+}
+
+if (result.aggregate.legitimate?.falsePositiveRate > 0.02) {
+  throw new Error('More than 2% of ordinary customer activity is being blocked');
 }
 ```
 
@@ -894,9 +972,10 @@ If you find a way to use `fraud-sim` that the maintainers should consider out of
 |---|---|---|
 | v0.1 | Core abstractions, 2 scenarios, HTTP adapter | ✅ Released |
 | v0.2 | LLM-driven adaptive attacker, SSE streaming | ✅ Released |
-| v0.3 | 7 additional scenarios (library complete), seeded runs, rate limiting, TypeScript declarations | ✅ Released (current) |
-| v0.4 | CLI runner, reporting (HTML/JUnit/JSON), latency percentiles, suite concurrency | ✅ Released (current) |
-| v0.5 | Side-by-side comparison of two targets, scenario packs | Planned |
+| v0.3 | 7 additional scenarios (library complete), seeded runs, rate limiting, TypeScript declarations | Shipped in v0.5 |
+| v0.4 | CLI runner, reporting (HTML/JUnit/JSON), latency percentiles, suite concurrency | Shipped in v0.5 |
+| v0.5 | Legitimate customer traffic and false-positive reporting, markets, hardened practice target | ✅ Current |
+| v0.6 | Config-file request mapping, `init` and `demo` commands, before/after comparison | Planned |
 | v1.0 | Community scenario library, governance, stable API | Planned |
 
 See [`CHANGELOG.md`](CHANGELOG.md) for what landed in each release.

@@ -20,6 +20,8 @@ import {
   latencyFor,
   findingsFor,
   outcomeFor,
+  isLegitimate,
+  pct,
 } from './aggregate.js';
 
 const FORMATS = ['html', 'junit', 'json', 'text'];
@@ -38,6 +40,9 @@ const FORMATS = ['html', 'junit', 'json', 'text'];
  * @param {string} [options.version]
  * @param {number} [options.failUnder] - Block rate below which a scenario is a
  *   CI failure. Used by the junit and text formats.
+ * @param {number} [options.maxFalsePositiveRate] - Share of legitimate
+ *   customer events that may be blocked before the run fails. Used by the
+ *   junit and text formats.
  * @param {string} [options.currency='NGN'] - Display currency. Amounts are
  *   minor-unit integers, so this changes presentation only.
  * @param {string} [options.locale] - Defaults to a locale for the currency.
@@ -72,6 +77,7 @@ export function summarise(result, options = {}) {
     reasonCounts: Object.fromEntries(reasonFrequency(reports)),
     scenarios: reports.map((r) => ({
       scenarioId: r.scenarioId,
+      traffic: r.traffic ?? 'attack',
       attempts: r.attempts,
       scoredAttempts: r.scoredAttempts,
       blocked: r.blocked,
@@ -85,6 +91,16 @@ export function summarise(result, options = {}) {
       simulatedTime: r.simulatedTime ?? false,
       attackerSucceeded: r.attackerSucceeded ?? null,
       estimatedLossKobo: r.estimatedLossKobo ?? null,
+      ...(isLegitimate(r)
+        ? {
+            falsePositiveRate: r.falsePositiveRate ?? r.blockRate,
+            frictionRate: r.frictionRate ?? null,
+            customers: r.customers ?? null,
+            customersBlocked: r.customersBlocked ?? null,
+            valueBlockedMinor: r.valueBlockedMinor ?? 0,
+            byStage: r.byStage ?? null,
+          }
+        : {}),
       outcome: outcomeFor(r),
     })),
   };
@@ -92,13 +108,15 @@ export function summarise(result, options = {}) {
 
 /** A terminal summary — what the CLI prints when no report file is asked for. */
 function renderText(result, options = {}) {
-  const { reports } = normaliseInput(result);
-  const totals = totalsFor(reports);
-  const findings = findingsFor(reports);
+  const { reports: all } = normaliseInput(result);
+  const reports = all.filter((r) => !isLegitimate(r));
+  const customers = all.filter(isLegitimate);
+  const totals = totalsFor(all);
+  const findings = findingsFor(all, options);
 
   const pad = (s, n) => String(s).padEnd(n);
   const rpad = (s, n) => String(s).padStart(n);
-  const width = Math.max(20, ...reports.map((r) => String(r.scenarioId).length));
+  const width = Math.max(20, ...all.map((r) => String(r.scenarioId).length));
 
   const lines = [];
   lines.push('');
@@ -125,11 +143,53 @@ function renderText(result, options = {}) {
     lines.push(`  LOSS   ${formatMoney(totals.estimatedLossMinor, options)} extracted`);
   }
 
+  // The other half of the measurement, in its own table: here a block is the
+  // bad outcome, so it must not sit in a column read as "higher is better".
+  if (customers.length) {
+    const legit = totals.legitimate;
+    lines.push('');
+    lines.push(
+      `  ${pad('LEGITIMATE TRAFFIC', width)}  ${rpad('EVENTS', 6)}  ${rpad('BLOCK', 6)}  ${rpad('CHALL', 6)}  ${rpad('ALLOW', 6)}  ${rpad('FALSE+', 7)}  OUTCOME`
+    );
+    lines.push(`  ${'-'.repeat(width + 48)}`);
+    for (const r of customers) {
+      lines.push(
+        `  ${pad(r.scenarioId, width)}  ${rpad(r.attempts, 6)}  ${rpad(r.blocked, 6)}  ` +
+          `${rpad(r.stepUp, 6)}  ${rpad(r.allowed, 6)}  ${rpad(pct(r.falsePositiveRate ?? r.blockRate), 7)}  ${outcomeFor(r).label}`
+      );
+    }
+    lines.push('');
+    lines.push(
+      `  CUSTOMERS  ${legit.scoredAttempts} events · ${pct(legit.falsePositiveRate)} blocked (false positives) · ` +
+        `${pct(legit.frictionRate)} challenged or blocked · ${legit.customersBlocked} of ${legit.customers} customers refused`
+    );
+    if (legit.valueBlockedMinor > 0) {
+      lines.push(`  REFUSED    ${formatMoney(legit.valueBlockedMinor, options)} of customers' own payments`);
+    }
+  }
+
   if (findings.length) {
     lines.push('');
     lines.push(`  FINDINGS (${findings.length})`);
     for (const f of findings) {
       lines.push(`    [${f.severity.toUpperCase()}] ${f.scenario} — ${f.title}`);
+    }
+  }
+
+  if (Number.isFinite(options.maxFalsePositiveRate)) {
+    lines.push('');
+    const legit = totals.legitimate;
+    const ceiling = pct(options.maxFalsePositiveRate);
+    if (!legit) {
+      lines.push('  GATE   FP n/a — no legitimate traffic in this run (add legitimate-users)');
+    } else if (legit.errorRate > 0.05) {
+      lines.push('  GATE   FP n/a — too many customer events went unscored to judge');
+    } else {
+      lines.push(
+        legit.falsePositiveRate > options.maxFalsePositiveRate
+          ? `  GATE   FAIL — false-positive rate ${pct(legit.falsePositiveRate)} is above the ${ceiling} ceiling`
+          : `  GATE   PASS — false-positive rate ${pct(legit.falsePositiveRate)} is within the ${ceiling} ceiling`
+      );
     }
   }
 
@@ -172,6 +232,8 @@ export { formatMoney, currencySymbol } from './money.js';
 export {
   normaliseInput,
   totalsFor,
+  legitimateTotalsFor,
+  isLegitimate,
   reasonFrequency,
   latencyFor,
   findingsFor,

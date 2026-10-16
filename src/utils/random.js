@@ -281,6 +281,14 @@ export function randomUserAgent() {
 }
 
 /**
+ * A real browser's user agent — never a tool. For legitimate traffic, where a
+ * `curl` agent would be a false positive the simulator manufactured.
+ */
+export function randomBrowserUserAgent() {
+  return pickOne(USER_AGENTS.filter((ua) => ua.startsWith('Mozilla/')));
+}
+
+/**
  * An account identifier shaped like the active market's — 10 digits in Nigeria,
  * 8 in the UK, a variable length in the US. Format matters: a target that
  * validates account numbers rejects a wrongly-shaped one before it ever scores

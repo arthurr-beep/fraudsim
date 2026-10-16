@@ -6,9 +6,14 @@ import { mockAdapter } from '../../src/adapters/mock.js';
 const opts = { targetUserId: 'victim_1', maxRounds: 5, delayMs: 0 };
 
 test('adaptive-attacker is registered alongside the full scenario library', () => {
-  const ids = listScenarios().map((s) => s.id);
-  assert.ok(ids.includes('adaptive-attacker'));
-  assert.equal(ids.length, 10);
+  const scenarios = listScenarios();
+  const attacks = scenarios.filter((s) => s.traffic === 'attack').map((s) => s.id);
+  assert.ok(attacks.includes('adaptive-attacker'));
+  assert.equal(attacks.length, 10);
+  assert.deepEqual(
+    scenarios.filter((s) => s.traffic === 'legitimate').map((s) => s.id),
+    ['legitimate-users']
+  );
 });
 
 test('adaptive-attacker requires targetUserId', async () => {
