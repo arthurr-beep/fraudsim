@@ -24,7 +24,7 @@ import { run, runSuite, listScenarios, resolveLocale, localeIds } from '../src/i
 import { httpAdapter } from '../src/adapters/http.js';
 import { generateReport, summarise } from '../src/reporting/index.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 
 const FORMAT_BY_EXT = {
   '.html': 'html',
