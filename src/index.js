@@ -10,8 +10,18 @@
  *   const report = await run('credential-stuffing', { target, options: {...} });
  */
 
-import { Runner } from './runner.js';
+/**
+ * @typedef {import('./types.js').Scenario} Scenario
+ * @typedef {import('./types.js').ScenarioMetadata} ScenarioMetadata
+ * @typedef {import('./types.js').ScenarioReport} ScenarioReport
+ * @typedef {import('./types.js').SuiteReport} SuiteReport
+ * @typedef {import('./types.js').TargetAdapter} TargetAdapter
+ */
+
+import { Runner, DEFAULT_MAX_REQUESTS_PER_SECOND } from './runner.js';
 import { scenarios as builtInScenarios } from './scenarios/index.js';
+import { rateLimiter } from './utils/throttle.js';
+import { legitimateTotalsFor } from './reporting/aggregate.js';
 
 /**
  * The fixed attacker IP pool, with declared geolocation and reputation.
@@ -25,7 +35,8 @@ import { scenarios as builtInScenarios } from './scenarios/index.js';
  *
  * Used by scenarios when `options.ipPersona` is anything other than 'random'.
  */
-export { DEMO_IP_POOL, pickDemoIp } from './utils/random.js';
+export { DEMO_IP_POOL, demoIpPool, pickDemoIp } from './utils/random.js';
+export { LOCALES, localeIds, resolveLocale, DEFAULT_LOCALE } from './locales/index.js';
 
 // Module-level registry — extensible via registerScenario()
 const registry = new Map();
@@ -38,7 +49,7 @@ for (const scenario of builtInScenarios) {
  *
  * @param {string} scenarioId - The ID of a registered scenario
  * @param {object} config
- * @param {object} config.target - A TargetAdapter
+ * @param {TargetAdapter} config.target - A TargetAdapter
  * @param {object} [config.options] - Scenario-specific options (merged with defaults)
  * @param {function} [config.onEvent] - Event callback (event) => void
  * @param {AbortSignal} [config.signal] - For cancellation
@@ -67,13 +78,19 @@ export async function run(scenarioId, config = {}) {
 /**
  * Run a suite of scenarios as a benchmark.
  *
- * v0.1 — runs sequentially. v0.4 will add parallel execution and full reporting.
- *
  * @param {object} config
  * @param {string} config.name - Human-readable suite name
  * @param {Array<{id: string, options?: object}>} config.scenarios
- * @param {object} config.target
+ * @param {TargetAdapter} config.target
  * @param {function} [config.onEvent]
+ * @param {AbortSignal} [config.signal]
+ * @param {number} [config.seed] - Seeds the suite. Each scenario gets a
+ *   distinct derived seed, so the suite replays as a whole without every
+ *   scenario drawing the same values.
+ * @param {number} [config.maxRequestsPerSecond=25] - Shared across the whole
+ *   suite, including when scenarios run concurrently.
+ * @param {number} [config.concurrency=1] - How many scenarios run at once.
+ *   See the note below before raising it.
  * @returns {Promise<SuiteReport>}
  */
 export async function runSuite(config = {}) {
@@ -81,34 +98,83 @@ export async function runSuite(config = {}) {
     throw new Error('A suite requires at least one scenario.');
   }
 
-  const startedAt = new Date().toISOString();
-  const scenarioReports = [];
+  const concurrency = config.concurrency ?? 1;
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error(`concurrency must be a positive integer, received: ${config.concurrency}`);
+  }
 
-  for (const entry of config.scenarios) {
-    const report = await run(entry.id, {
+  const startedAt = new Date().toISOString();
+  const maxRequestsPerSecond =
+    config.maxRequestsPerSecond ?? DEFAULT_MAX_REQUESTS_PER_SECOND;
+
+  // One limiter for the whole suite. A limiter per run would let the effective
+  // request ceiling scale with the concurrency — the opposite of a ceiling.
+  const limiter = Number.isFinite(maxRequestsPerSecond)
+    ? rateLimiter(maxRequestsPerSecond, { signal: config.signal })
+    : null;
+
+  const runOne = (entry, index) =>
+    run(entry.id, {
       target: config.target,
       options: entry.options ?? {},
       onEvent: config.onEvent,
       signal: config.signal,
       llm: entry.llm ?? config.llm,
-      // Each scenario gets a distinct but derived seed, so a suite is
-      // reproducible as a whole without every scenario replaying the same
-      // sequence of values.
-      ...(config.seed != null ? { seed: config.seed + scenarioReports.length } : {}),
-      ...(config.maxRequestsPerSecond != null
-        ? { maxRequestsPerSecond: config.maxRequestsPerSecond }
-        : {}),
+      ...(config.seed != null ? { seed: config.seed + index } : {}),
+      ...(config.locale != null ? { locale: config.locale } : {}),
+      maxRequestsPerSecond,
+      ...(limiter ? { limiter } : {}),
     });
-    scenarioReports.push(report);
-  }
+
+  const scenarioReports =
+    concurrency === 1
+      ? await runSequentially(config.scenarios, runOne)
+      : await runPooled(config.scenarios, runOne, concurrency);
 
   return {
     suiteName: config.name ?? 'unnamed-suite',
     startedAt,
     completedAt: new Date().toISOString(),
+    concurrency,
     scenarioReports,
     aggregate: aggregateReports(scenarioReports),
   };
+}
+
+async function runSequentially(entries, runOne) {
+  const out = [];
+  for (const [index, entry] of entries.entries()) {
+    out.push(await runOne(entry, index));
+  }
+  return out;
+}
+
+/**
+ * Run up to `limit` scenarios at once, preserving input order in the results.
+ *
+ * ── Before raising concurrency ────────────────────────────────────────
+ * Scenarios sharing a target interleave their traffic, and most fraud engines
+ * keep per-user and per-IP state. Two scenarios touching the same account at
+ * once will influence each other's decisions, so a parallel suite measures a
+ * *combined* attack rather than each attack independently. That is realistic —
+ * real systems face concurrent attackers — but it is a different question from
+ * "does this scenario get caught", and results will not match a sequential run.
+ * Use distinct users per scenario if you want both speed and isolation.
+ */
+async function runPooled(entries, runOne, limit) {
+  const results = new Array(entries.length);
+  let cursor = 0;
+
+  const workers = Array.from({ length: Math.min(limit, entries.length) }, async () => {
+    for (;;) {
+      const index = cursor++;
+      if (index >= entries.length) return;
+      results[index] = await runOne(entries[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
 
 /**
@@ -120,6 +186,7 @@ export function listScenarios() {
     id: s.id,
     name: s.name,
     description: s.description,
+    traffic: s.traffic ?? 'attack',
     defaultOptions: s.defaultOptions,
   }));
 }
@@ -160,9 +227,16 @@ function validateScenario(scenario) {
   if (scenario.defaultOptions && typeof scenario.defaultOptions !== 'object') {
     throw new Error('Scenario.defaultOptions must be an object.');
   }
+  if (scenario.traffic != null && !['attack', 'legitimate'].includes(scenario.traffic)) {
+    throw new Error(`Scenario.traffic must be "attack" or "legitimate", received: "${scenario.traffic}".`);
+  }
 }
 
 function aggregateReports(reports) {
+  // Attack and legitimate traffic answer opposite questions — a block is a
+  // catch on one and a false positive on the other — so they are never summed.
+  const attacks = reports.filter((r) => r.traffic !== 'legitimate');
+
   const totals = {
     attempts: 0,
     blocked: 0,
@@ -170,7 +244,7 @@ function aggregateReports(reports) {
     allowed: 0,
     errors: 0,
   };
-  for (const r of reports) {
+  for (const r of attacks) {
     totals.attempts += r.attempts ?? 0;
     totals.blocked += r.blocked ?? 0;
     totals.stepUp += r.stepUp ?? 0;
@@ -189,5 +263,6 @@ function aggregateReports(reports) {
     blockRate: scoredAttempts > 0 ? totals.blocked / scoredAttempts : 0,
     stepUpRate: scoredAttempts > 0 ? totals.stepUp / scoredAttempts : 0,
     errorRate: totals.attempts > 0 ? totals.errors / totals.attempts : 0,
+    legitimate: legitimateTotalsFor(reports),
   };
 }

@@ -45,8 +45,8 @@ export default {
   defaultOptions: {
     targetUserId: null, // required
     withdrawalCount: 20,
-    amountKobo: 2500000, // NGN 25,000 — deliberately modest
-    amountJitterKobo: 500000, // vary amounts so they don't look scripted
+    amountMinor: 2500000, // NGN 25,000 — deliberately modest
+    amountJitterMinor: 500000, // vary amounts so they don't look scripted
     intervalMinutes: 300, // 5 simulated hours between withdrawals
     sameDevice: true, // a patient attacker keeps one stable device
     delayMs: 60, // wall-clock pacing only
@@ -65,7 +65,7 @@ export default {
 
     const results = newResults({
       withdrawalsAttempted: 0,
-      drainedKobo: 0,
+      drainedMinor: 0,
       firstBlockedAtWithdrawal: null,
       firstStepUpAtWithdrawal: null,
     });
@@ -86,7 +86,7 @@ export default {
     emit({
       type: 'milestone',
       message:
-        `Draining NGN ${(options.amountKobo / 100).toLocaleString()} at a time, ` +
+        `Draining NGN ${(options.amountMinor / 100).toLocaleString()} at a time, ` +
         `every ${humaniseMs(options.intervalMinutes * 60_000)}, ` +
         `over a simulated ${humaniseMs(totalSpanMs)}`,
       timestamp: Date.now(),
@@ -104,10 +104,10 @@ export default {
       if (signal.aborted) break;
       if (results.attempts >= options.maxTotalAttempts) break;
 
-      const jitter = options.amountJitterKobo
-        ? randomInt(-options.amountJitterKobo, options.amountJitterKobo)
+      const jitter = options.amountJitterMinor
+        ? randomInt(-options.amountJitterMinor, options.amountJitterMinor)
         : 0;
-      const amount = Math.max(1, options.amountKobo + jitter);
+      const amount = Math.max(1, options.amountMinor + jitter);
 
       const overrides = { timestamp: clock.iso(), session_id: sessionId };
       if (device) overrides.device_fingerprint = device;
@@ -124,14 +124,14 @@ export default {
       results.withdrawalsAttempted++;
 
       if (response?.decision === 'ALLOW') {
-        results.drainedKobo += amount;
+        results.drainedMinor += amount;
       } else if (response?.decision === 'BLOCK' && results.firstBlockedAtWithdrawal == null) {
         results.firstBlockedAtWithdrawal = i + 1;
         emit({
           type: 'milestone',
           message:
             `Blocked at withdrawal ${i + 1} of ${options.withdrawalCount} — ` +
-            `NGN ${(results.drainedKobo / 100).toLocaleString()} already gone ` +
+            `NGN ${(results.drainedMinor / 100).toLocaleString()} already gone ` +
             `over ${humaniseMs(clock.elapsedMs())}`,
           timestamp: Date.now(),
         });
@@ -152,7 +152,7 @@ export default {
       emit({
         type: 'milestone',
         message:
-          `Never blocked. NGN ${(results.drainedKobo / 100).toLocaleString()} drained across ` +
+          `Never blocked. NGN ${(results.drainedMinor / 100).toLocaleString()} drained across ` +
           `${results.withdrawalsAttempted} withdrawals — short-window velocity alone does not catch this.`,
         timestamp: Date.now(),
       });
@@ -160,12 +160,12 @@ export default {
 
     return {
       ...results,
-      estimatedLossKobo: results.drainedKobo,
-      attackerSucceeded: results.firstBlockedAtWithdrawal == null && results.drainedKobo > 0,
+      estimatedLossKobo: results.drainedMinor,
+      attackerSucceeded: results.firstBlockedAtWithdrawal == null && results.drainedMinor > 0,
       simulatedTime: true,
       simulatedSpan: humaniseMs(clock.elapsedMs()),
       // How much got out before anything fired — the number that matters here.
-      drainedBeforeFirstBlockKobo: results.drainedKobo,
+      drainedBeforeFirstBlockMinor: results.drainedMinor,
     };
   },
 };

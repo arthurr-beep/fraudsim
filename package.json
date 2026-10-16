@@ -1,21 +1,42 @@
 {
   "name": "fraud-sim",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "description": "Realistic synthetic attack traffic for testing fintech fraud detection systems",
   "type": "module",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./adapters": "./src/adapters/index.js",
-    "./streaming": "./src/streaming/index.js",
-    "./llm": "./src/llm/index.js",
-    "./utils": "./src/utils/index.js"
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./adapters": {
+      "types": "./types/adapters/index.d.ts",
+      "default": "./src/adapters/index.js"
+    },
+    "./streaming": {
+      "types": "./types/streaming/index.d.ts",
+      "default": "./src/streaming/index.js"
+    },
+    "./llm": {
+      "types": "./types/llm/index.d.ts",
+      "default": "./src/llm/index.js"
+    },
+    "./utils": {
+      "types": "./types/utils/index.d.ts",
+      "default": "./src/utils/index.js"
+    },
+    "./reporting": {
+      "types": "./types/reporting/index.d.ts",
+      "default": "./src/reporting/index.js"
+    }
   },
   "engines": {
     "node": ">=20"
   },
   "files": [
+    "bin/",
     "src/",
+    "types/",
     "examples/",
     "README.md",
     "LICENSE",
@@ -30,8 +51,12 @@
     "example:basic": "node examples/basic-credential-stuffing/index.js",
     "example:drain": "node examples/account-drain-demo/index.js",
     "example:mock-target": "node examples/express-mock-target/server.js",
+    "example:hardened-target": "node examples/express-hardened-target/server.js",
     "example:adaptive-target": "node examples/adaptive-attacker-demo/demo-target.js",
-    "example:adaptive": "node examples/adaptive-attacker-demo/index.js"
+    "example:adaptive": "node examples/adaptive-attacker-demo/index.js",
+    "build:types": "tsc",
+    "prepublishOnly": "npm run build:types && npm run lint && npm run test:all",
+    "example:adaptive-hardened": "node examples/adaptive-hardened-demo/index.js"
   },
   "keywords": [
     "fraud",
@@ -54,8 +79,14 @@
   "homepage": "https://github.com/arthurr-beep/fraudsim#readme",
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@types/node": "^20.19.43",
     "eslint": "^9.39.5",
     "express": "^4.21.0",
-    "globals": "^17.11.0"
+    "globals": "^17.11.0",
+    "typescript": "^5.9.3"
+  },
+  "types": "./types/index.d.ts",
+  "bin": {
+    "fraud-sim": "./bin/fraud-sim.js"
   }
 }

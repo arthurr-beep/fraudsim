@@ -7,6 +7,248 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — False positives, markets, a harder target — 2026-10-16
+
+The first npm release since 0.2.0. Versions 0.3.0 and 0.4.0 below were tagged
+in this changelog but never published, so everything from them ships here.
+
+### Added — the other half of the measurement
+
+- **`legitimate-users` scenario.** Ordinary customers, not an attack: routine
+  logins, a new phone, travel, payments to known payees and the occasional new
+  one. Every block it receives is a false positive, every step-up is friction.
+  Until now a defence that blocked everything scored a perfect run.
+
+  Built so the simulator does not manufacture the false positives it reports:
+  a warm-up gives each customer history before anything is measured (reported
+  separately, excluded from the rates); each customer has their own home
+  address, so users-per-IP rules cannot fire on crowding the simulator caused;
+  sessions are spread across days on the event clock; customers only use
+  browser user agents.
+- **Reports keep the two halves apart.** Attack totals, block rates and
+  `--fail-under` cover attack scenarios only. Legitimate traffic is summarised
+  under `totals.legitimate` (`falsePositiveRate`, `frictionRate`,
+  `customersBlocked`, `valueBlockedMinor`), in every format: its own table in
+  the terminal, a customer-impact panel in HTML with the bar colours inverted,
+  JUnit failures of type `FalsePositives`, and a high-severity finding that
+  names the stages and reason codes doing the blocking. When those reasons are
+  velocity rules on time-compressed traffic, the finding says the block may be
+  the simulator's clock rather than the customer.
+- **`--max-false-positives <rate>`** on the CLI: exit 1 when more than that
+  share of customer events was blocked. Refused up front if the run contains no
+  legitimate traffic, because the gate would otherwise pass on zero customers.
+- Every report and `listScenarios()` entry now carries
+  `traffic: 'attack' | 'legitimate'`. Custom scenarios may declare `traffic`;
+  it defaults to `'attack'`.
+
+### Fixed — the adaptive attacker could not replay a device
+
+- The history given to the LLM recorded the parameters a strategy *asked for*,
+  not the payload actually sent. Round 1 never names a fingerprint, so the model
+  saw `null` and could never replay the device the defender had challenged —
+  the exact gap the hardened practice target leaves for a smarter attacker.
+  History and `strategyHistory` now record the IP, user agent and fingerprint
+  that were sent.
+- `parameters` was declared inside the round loop, so a key the strategy
+  omitted was silently re-randomised every round instead of kept. Omitting a
+  key now means "keep it".
+- The OpenAI and Anthropic prompts now list the parameters the attacker
+  controls and say that history shows exactly what was sent.
+
+### Changed
+
+- `suite --all` runs `legitimate-users` first, before any attack has burned
+  shared state (blocked IPs, blocked devices) on the target.
+- README no longer claims the library benchmarks third-party vendors such as
+  Stripe Radar. It exercises the rules behind your own scoring API; synthetic
+  payloads say little about a vendor's ML, device SDK or consortium data.
+
+### Added — a target that makes the attacker work
+
+- **Hardened example target** (`examples/express-hardened-target`, port 4001)
+  and a contrast demo (`npm run example:adaptive-hardened`) that runs the same
+  scenario, at the same seed, against both practice targets.
+
+  The reason it exists: against the simple target the adaptive attacker wins on
+  move one and never adapts, so the artifact that is supposed to demonstrate
+  adaptation demonstrates nothing. The honest fix was a target worth attacking,
+  not a scenario rewritten to look busy — the scenario already adapts correctly
+  when something pushes back.
+
+  Its central rule is that an unrecognised device is never allowed outright,
+  only challenged, which is what defeats an attacker whose entire strategy is
+  rotation: rotating *creates* the unrecognised device. It also leaves one
+  deliberate gap — a device that was merely challenged is remembered as seen,
+  not as bad — so a smarter attacker beats it and the shipped deterministic one
+  does not. That asymmetry is the point.
+
+### Added — markets (breaking)
+
+fraud-sim is a global tool now, not a Nigerian one with global reporting.
+
+- **Locale packs** (`src/locales/`) supplying account-number and phone formats,
+  bank names, personal names, payload currency, and the cities that count as
+  domestic for geo rules. `NG`, `US`, `GB` and `KE` ship; adding one is a pull
+  request against a single file.
+- **`locale` option** on `run()` and `runSuite()`, and `--locale` on the CLI.
+  Scoped with `AsyncLocalStorage` like the random source, so no generator needed
+  a new argument and concurrent runs in different markets stay independent.
+  Reports default to the market's own currency.
+- Format is not cosmetic: a target that validates account numbers rejects a
+  wrongly-shaped one before scoring it, so a mis-marketed run measures nothing.
+  An unknown market code therefore throws instead of falling back.
+- `demoIpPool()` returns the IP pool for the market in scope. "Domestic" is
+  relative — Lagos is the quiet baseline for a Nigerian bank and a new-country
+  signal for a British one — so a fixed pool meant opposite things per target.
+  `DEMO_IP_POOL` remains exported as the default market's snapshot.
+
+### Changed — breaking
+
+- **The default market is `US`.** Previously every payload was Nigerian with no
+  way to say otherwise. Runs that want the old behaviour should pass
+  `locale: 'NG'`.
+- **Amount options renamed** from `*Kobo` to `*Minor`: `amountMinor`,
+  `amountJitterMinor`, `amountPerMuleMinor`, `microAmountMinor`,
+  `largeAmountMinor`, `bonusMinor`. The values are unchanged — they were always
+  minor-unit integers, and kobo and cents are structurally identical. The old
+  names still work and emit a deprecation warning, because the option validator
+  rejects undeclared keys and a bare rename would have been a hard break.
+- Report fields follow the same rename: `drainedMinor`, `totalMovedMinor`,
+  `reachedDestinationMinor`. `estimatedLossKobo` is still accepted and still
+  emitted alongside `estimatedLossMinor`.
+
+### Added — report currency
+
+- **`currency` and `locale` options** on `generateReport()` and `--currency` /
+  `--locale` on the CLI. Amounts were always minor-unit integers — kobo and
+  cents are structurally identical — so only presentation was ever bound to
+  naira. Nothing is converted: the integers are untouched and only the symbol
+  and grouping change, because a report that silently applied an FX rate would
+  be wrong the moment the rate moved.
+- The minor-unit exponent is read from `Intl` rather than assumed to be 2, so
+  zero-decimal currencies are not divided by a hundred. The same integer that
+  reads `₦606,000` correctly reads `￥60,600,000`.
+- `estimatedLossMinor` is now the canonical report field; `estimatedLossKobo`
+  keeps working for callers already written against it.
+
+### Fixed
+
+- **Seeded runs of `adaptive-attacker` ignored the seed.** The fallback provider
+  was constructed with a hardcoded `seed: 42`, so every seeded run produced an
+  identical strategy sequence no matter what the caller passed — in the one
+  scenario whose value is that the attack varies. The provider seed now derives
+  from the run's random source: reproducible under a seed, different across
+  seeds.
+- **The deterministic attacker described the wrong signal.** A rotating attacker
+  sees `NEW_DEVICE` on every response because rotating is what creates it, and
+  device signals were classified ahead of IP ones — so the attacker announced it
+  was changing fingerprint while the address was what blocked it. IP is now
+  ranked above device, being the part it can actually change for the better.
+- **A step-up was reported as a block** in the attacker's reasoning. That text is
+  read by a human in a report, and an attacker that mis-describes what just
+  happened does not read as reasoning.
+
+## [0.4.0] — CLI, reporting, concurrency — 2026-08-29
+
+### Added — command line
+
+- **`fraud-sim` CLI** (`npx fraud-sim`) with `list`, `run` and `suite`.
+  Gates CI without writing JavaScript. Exit codes separate a weak defence (1)
+  from an unmeasurable run (3), because a pipeline that reports an unreachable
+  staging box as a security failure sends people to debug the wrong system.
+- `suite --all` synthesises the account identifiers each scenario requires,
+  giving every scenario a disjoint block so they do not contaminate each other's
+  per-user counters. `--option key=value` applies to every scenario that
+  declares that key; `--option <scenario>.key=value` targets one.
+- `--fail-under` gates the **overall** block rate; `--fail-under-each` gates
+  every scenario individually. The split matters: some scenarios include the
+  victim's own legitimate traffic, so a low block rate there is correct, and a
+  naive per-scenario floor produces false failures.
+- Distinct error causes are surfaced during a run, deduplicated. Previously a
+  broken target reported "100% failed" without saying why.
+- **MSYS path-mangling guard.** Git Bash rewrites `--endpoint-login /score/login`
+  into `C:/Program Files/Git/score/login`, so every request 404s and the run
+  blames the target. Detected during development of this release; the CLI now
+  names the cause and the fix instead.
+
+### Added — reporting
+
+- **`generateReport(result, { format })`** in `fraud-sim/reporting`, with
+  `html`, `junit`, `json` and `text` formats, plus `summarise()` for asserting
+  on a run without parsing a document.
+- The HTML report is a standalone, printable document: findings ranked by cost,
+  per-scenario decision bars, reason-code frequency, latency, and a limits
+  section stating what the run cannot tell you. Decision colours are fixed
+  status hues with the count always beside the bar, so colour is never the sole
+  carrier.
+- **JUnit is scored from the defender's side.** A blocked attack passes; a
+  failure means the attack succeeded or nothing was blocked; an unreliable
+  target is an `error`; a timing-dependent result is `skipped`, never a pass.
+- Every report reads its numbers from one aggregation module, so no two formats
+  can disagree. Totals are recomputed from counts rather than trusting a stored
+  rate.
+
+### Added — concurrency
+
+- **`runSuite({ concurrency })`** runs scenarios in parallel, preserving input
+  order in the results. The rate ceiling is shared across the whole suite: a
+  limiter per run would have let the effective ceiling scale with the
+  concurrency, which is the opposite of what a ceiling is for. Seeding stays
+  correct under parallelism because the random source is scoped with
+  `AsyncLocalStorage` rather than a module global.
+- Sequential remains the default, and the docs say why: scenarios sharing a
+  target interleave, so a parallel suite measures a combined attack rather than
+  each attack independently.
+
+### Added — metrics
+
+- Every report now carries **latency percentiles** (nearest-rank, so each figure
+  is a latency that actually occurred) and **reason-code frequency**, collected
+  by the runner off the event stream so no scenario can forget to report them.
+
+### Changed
+
+- A scenario where nothing was blocked is now classified as "never blocked" even
+  when it also carries a timing caveat — filing that as a methodology footnote
+  buried the headline.
+
+### Tests
+
+- 31 new (180 total): outcome ranking, aggregation invariants, HTML and XML
+  escaping of untrusted scenario ids and reason codes, the JUnit state mapping,
+  gate scoping, concurrency overlap, order preservation, seeded reproducibility
+  under concurrency, and a check that the shared ceiling holds at 1× and 4×
+  concurrency.
+
+## [0.3.0] — Complete scenario library, reproducible runs — 2026-08-29
+
+Ten scenarios, seeded replay, an enforced rate ceiling, bundled TypeScript
+declarations, and two fixes to how results are measured. **Read the breaking
+notes before upgrading:** HTTP failures no longer count as blocks, unknown
+scenario options are now rejected, and several attack defaults were retuned to
+actually cross common rule thresholds.
+
+### Added — TypeScript declarations
+
+- **Types ship with the package.** Declarations are generated from the existing
+  JSDoc by `npm run build:types` and wired into every export subpath, so
+  `fraud-sim`, `/adapters`, `/llm`, `/streaming` and `/utils` all resolve with
+  full autocomplete. No `@types` package needed.
+- **`src/types.js`** defines the public shapes (`ScenarioReport`,
+  `TargetAdapter`, `ScenarioEvent`, `Scenario`, `SuiteReport` and friends) as
+  JSDoc typedefs. These names were already referenced throughout the codebase
+  but never defined, so the generated declarations previously failed to compile
+  with four `TS2304: Cannot find name` errors.
+- **`prepublishOnly`** rebuilds declarations and runs lint plus the full test
+  suite, so a release cannot ship stale types or a failing suite.
+
+### Fixed
+
+- **The README claimed CommonJS support the package does not have.** It is
+  ESM-only; `require('fraud-sim')` throws `ERR_REQUIRE_ESM`. The install
+  section now says so and documents the dynamic-import workaround.
+
+
 ### Added — reproducible runs
 
 - **`seed` option on `run()` and `runSuite()`.** A seeded run replays choice

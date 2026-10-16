@@ -39,8 +39,8 @@ export default {
     attackerUserId: 'card_tester_001', // the merchant-side account doing the probing
     cardCount: 60, // distinct cards in the stolen list
     binCount: 3, // how many BIN ranges the list is drawn from — few is the tell
-    microAmountKobo: 5000, // NGN 50 probe
-    largeAmountKobo: 15000000, // NGN 150,000 once a card is known good
+    microAmountMinor: 5000, // NGN 50 probe
+    largeAmountMinor: 15000000, // NGN 150,000 once a card is known good
     escalateAfter: 1, // approvals on a card before attempting the real charge
     delayMs: 80,
     maxTotalAttempts: 300,
@@ -72,7 +72,7 @@ export default {
       type: 'milestone',
       message:
         `Probing ${options.cardCount} cards across ${bins.length} BIN range(s) ` +
-        `with NGN ${(options.microAmountKobo / 100).toLocaleString()} authorisations`,
+        `with NGN ${(options.microAmountMinor / 100).toLocaleString()} authorisations`,
       timestamp: Date.now(),
     });
 
@@ -93,7 +93,7 @@ export default {
       const probe = await scoreAndCount({
         ctx,
         method: 'scoreAction',
-        payload: buildCardAuthPayload(options.attackerUserId, card, options.microAmountKobo, {
+        payload: buildCardAuthPayload(options.attackerUserId, card, options.microAmountMinor, {
           ip_address: ip.ip,
           details: { probe: true },
         }),
@@ -122,7 +122,7 @@ export default {
             payload: buildCardAuthPayload(
               options.attackerUserId,
               card,
-              options.largeAmountKobo,
+              options.largeAmountMinor,
               { ip_address: ip.ip, details: { probe: false } }
             ),
             results,
@@ -142,14 +142,14 @@ export default {
       }
     }
 
-    const lossKobo = results.escalationsAllowed * options.largeAmountKobo;
+    const lossMinor = results.escalationsAllowed * options.largeAmountMinor;
 
     emit({
       type: 'milestone',
       message:
         `${results.cardsValidated} of ${results.cardsTested} cards validated; ` +
         `${results.escalationsAllowed} of ${results.escalations} charges succeeded ` +
-        `(NGN ${(lossKobo / 100).toLocaleString()} at risk)`,
+        `(NGN ${(lossMinor / 100).toLocaleString()} at risk)`,
       timestamp: Date.now(),
     });
 
@@ -157,7 +157,7 @@ export default {
       ...results,
       // The headline number for this scenario is not the block rate — it is
       // whether any escalated charge got through at all.
-      estimatedLossKobo: lossKobo,
+      estimatedLossKobo: lossMinor,
       attackerSucceeded: results.escalationsAllowed > 0,
       binsUsed: bins,
     };

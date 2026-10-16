@@ -38,7 +38,7 @@ export default {
 
   defaultOptions: {
     accountCount: 40,
-    bonusKobo: 200000, // NGN 2,000 per signup
+    bonusMinor: 200000, // NGN 2,000 per signup
     deviceCount: 3, // distinct fingerprints spread across all accounts
     subnetCount: 2, // distinct /24s the signups come from
     sharedPayoutAccount: null, // null → generated; all cash-outs land here
@@ -74,7 +74,7 @@ export default {
       type: 'milestone',
       message:
         `Farming ${options.accountCount} accounts for NGN ` +
-        `${(options.bonusKobo / 100).toLocaleString()} each across ${devices.length} device(s) ` +
+        `${(options.bonusMinor / 100).toLocaleString()} each across ${devices.length} device(s) ` +
         `and ${subnetSeeds.length} subnet(s), all paying out to ${payoutAccount}`,
       timestamp: Date.now(),
     });
@@ -97,7 +97,7 @@ export default {
           device_fingerprint: device,
           details: {
             referred_by: referrer,
-            signup_bonus_kobo: options.bonusKobo,
+            signup_bonus_kobo: options.bonusMinor,
             payout_account: payoutAccount,
           },
         }),
@@ -125,7 +125,7 @@ export default {
               userId,
               'promo_claim',
               {
-                bonus_kobo: options.bonusKobo,
+                bonus_kobo: options.bonusMinor,
                 payout_account: payoutAccount,
                 referred_by: referrer,
               },
@@ -146,19 +146,19 @@ export default {
       }
     }
 
-    const paidKobo = results.bonusesClaimed * options.bonusKobo;
+    const paidMinor = results.bonusesClaimed * options.bonusMinor;
 
     emit({
       type: 'milestone',
       message:
         `${results.accountsCreated} of ${results.accountsAttempted} accounts created, ` +
-        `${results.bonusesClaimed} bonuses paid (NGN ${(paidKobo / 100).toLocaleString()})`,
+        `${results.bonusesClaimed} bonuses paid (NGN ${(paidMinor / 100).toLocaleString()})`,
       timestamp: Date.now(),
     });
 
     return {
       ...results,
-      estimatedLossKobo: paidKobo,
+      estimatedLossKobo: paidMinor,
       attackerSucceeded: results.bonusesClaimed > 0,
       sharedPayoutAccount: payoutAccount,
       devicesUsed: devices.length,

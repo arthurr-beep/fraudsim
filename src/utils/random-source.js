@@ -25,8 +25,19 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { DeterministicRng } from './rng.js';
+import { resolveLocale, DEFAULT_LOCALE } from '../locales/index.js';
 
 const storage = new AsyncLocalStorage();
+
+/**
+ * The market in scope for the current run.
+ *
+ * Scoped exactly like the random source, and for the same reason: a module-level
+ * variable would work for one run and silently corrupt two concurrent ones,
+ * generating one market's payloads inside another market's run with no error to
+ * show for it.
+ */
+const localeStorage = new AsyncLocalStorage();
 
 /**
  * The default, unseeded source. Fine for generating attack traffic; useless
@@ -72,4 +83,22 @@ export function withSeed(seed, fn) {
 /** True when a seeded generator is currently in scope. */
 export function isSeeded() {
   return storage.getStore() !== undefined;
+}
+
+/** The locale pack in scope, or the default when a run did not name one. */
+export function currentLocale() {
+  return localeStorage.getStore() ?? resolveLocale(DEFAULT_LOCALE);
+}
+
+/**
+ * Run `fn` with a market in scope. Every generator inside it — account numbers,
+ * banks, names, phone numbers, payload currency — draws from that pack.
+ *
+ * @param {string|object} locale - A bundled locale id, or a locale object.
+ * @param {() => T} fn
+ * @returns {T}
+ * @template T
+ */
+export function withLocale(locale, fn) {
+  return localeStorage.run(resolveLocale(locale), fn);
 }

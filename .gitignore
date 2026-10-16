@@ -46,3 +46,6 @@ CLAUDE.md
 # Publishing runbook — maintainer only, do not push
 docs/PUBLISHING.md
 .npmrc
+
+# Generated type declarations (built on publish by prepublishOnly)
+types/

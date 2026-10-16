@@ -39,7 +39,7 @@ export default {
   defaultOptions: {
     sourceUserId: null, // required — the compromised or complicit origin
     muleCount: 8,
-    amountPerMuleKobo: 30000000, // NGN 300,000 to each mule
+    amountPerMuleMinor: 30000000, // NGN 300,000 to each mule
     retentionRatio: 0.05, // the cut each mule keeps; the rest is forwarded
     finalDestinationAccount: null, // null → generated
     forwardDelayMinutes: 45, // simulated gap between receiving and forwarding
@@ -65,8 +65,8 @@ export default {
       forwardTransfers: 0,
       fanOutAllowed: 0,
       forwardAllowed: 0,
-      totalMovedKobo: 0,
-      reachedDestinationKobo: 0,
+      totalMovedMinor: 0,
+      reachedDestinationMinor: 0,
     });
 
     const destination = options.finalDestinationAccount ?? randomAccountNumber();
@@ -84,7 +84,7 @@ export default {
     emit({
       type: 'milestone',
       message:
-        `Layering NGN ${((options.amountPerMuleKobo * mules.length) / 100).toLocaleString()} ` +
+        `Layering NGN ${((options.amountPerMuleMinor * mules.length) / 100).toLocaleString()} ` +
         `through ${mules.length} mules to ${destination}, ` +
         `each keeping ${(options.retentionRatio * 100).toFixed(0)}%`,
       timestamp: Date.now(),
@@ -101,7 +101,7 @@ export default {
         payload: buildTransferPayload(
           options.sourceUserId,
           mule.account,
-          options.amountPerMuleKobo,
+          options.amountPerMuleMinor,
           { timestamp: clock.iso() }
         ),
         results,
@@ -111,7 +111,7 @@ export default {
       results.fanOutTransfers++;
       if (response?.decision === 'ALLOW') {
         results.fanOutAllowed++;
-        results.totalMovedKobo += options.amountPerMuleKobo;
+        results.totalMovedMinor += options.amountPerMuleMinor;
         mule.funded = true;
       }
 
@@ -144,7 +144,7 @@ export default {
       timestamp: Date.now(),
     });
 
-    const forwardKobo = Math.round(options.amountPerMuleKobo * (1 - options.retentionRatio));
+    const forwardMinor = Math.round(options.amountPerMuleMinor * (1 - options.retentionRatio));
 
     for (const mule of mules) {
       if (signal.aborted) break;
@@ -154,7 +154,7 @@ export default {
       const response = await scoreAndCount({
         ctx,
         method: 'scoreWithdrawal',
-        payload: buildTransferPayload(mule.userId, destination, forwardKobo, {
+        payload: buildTransferPayload(mule.userId, destination, forwardMinor, {
           ip_address: mule.ip,
           device_fingerprint: mule.device,
           timestamp: clock.iso(),
@@ -166,7 +166,7 @@ export default {
       results.forwardTransfers++;
       if (response?.decision === 'ALLOW') {
         results.forwardAllowed++;
-        results.reachedDestinationKobo += forwardKobo;
+        results.reachedDestinationMinor += forwardMinor;
       }
 
       clock.advance(5 * 60_000);
@@ -184,7 +184,7 @@ export default {
 
 function finalise(results, destination, mules, clock) {
   const passThroughRatio =
-    results.totalMovedKobo > 0 ? results.reachedDestinationKobo / results.totalMovedKobo : 0;
+    results.totalMovedMinor > 0 ? results.reachedDestinationMinor / results.totalMovedMinor : 0;
 
   return {
     ...results,
@@ -193,8 +193,8 @@ function finalise(results, destination, mules, clock) {
     // The ratio a graph-aware system should find alarming: money arriving and
     // leaving an intermediary almost untouched.
     passThroughRatio: Math.round(passThroughRatio * 1000) / 1000,
-    estimatedLossKobo: results.reachedDestinationKobo,
-    attackerSucceeded: results.reachedDestinationKobo > 0,
+    estimatedLossKobo: results.reachedDestinationMinor,
+    attackerSucceeded: results.reachedDestinationMinor > 0,
     simulatedTime: true,
     simulatedSpan: humaniseMs(clock.elapsedMs()),
   };

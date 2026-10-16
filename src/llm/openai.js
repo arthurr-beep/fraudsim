@@ -21,6 +21,13 @@ const TIMEOUT_MS = 10000;
 const SYSTEM_PROMPT = `You are simulating a fraud actor probing a fintech security system.
 You can only observe API responses — you cannot see the rules.
 Your goal: based on the attack history, decide what to change for the next attempt.
+Each history entry shows the exact parameters sent that round and the decision returned.
+You control these parameters:
+  "ip"                - source IPv4 address
+  "userAgent"         - browser user agent string
+  "deviceFingerprint" - device fingerprint; reuse one from history to replay that device
+  "delayMs"           - how long you would wait before the next attempt
+Omit a parameter to keep its previous value.
 Respond ONLY with valid JSON: { "reasoning": "...", "parameters": {...} }`;
 
 /**

@@ -22,6 +22,7 @@
 import { sleep } from '../utils/sleep.js';
 import { buildLoginPayload } from '../utils/faker-helpers.js';
 import { deterministic } from '../llm/deterministic.js';
+import { randomInt } from '../utils/random.js';
 
 export default {
   id: 'adaptive-attacker',
@@ -45,8 +46,13 @@ export default {
       throw new Error('adaptive-attacker requires options.targetUserId');
     }
 
-    // Fall back to a seeded deterministic provider when no LLM is supplied.
-    const llm = ctx.llm ?? deterministic({ seed: 42 });
+    // Fall back to the deterministic provider when no LLM is supplied. Its seed
+    // is drawn from the run's own random source rather than being hardcoded:
+    // under a seeded run that makes the strategy sequence reproducible, and it
+    // makes two different run seeds actually produce different attacks. A fixed
+    // provider seed would have made every seeded run of this scenario identical
+    // no matter what seed the caller passed.
+    const llm = ctx.llm ?? deterministic({ seed: randomInt(1, 2 ** 31 - 1) });
 
     const results = {
       attempts: 0,
@@ -68,10 +74,13 @@ export default {
       timestamp: Date.now(),
     });
 
+    // Declared outside the loop: each round's strategy is merged over the
+    // parameters actually sent the round before.
+    let parameters;
+
     for (let round = 1; round <= options.maxRounds; round++) {
       if (signal.aborted) break;
 
-      let parameters;
       let reasoning;
 
       if (round === 1) {
@@ -109,6 +118,27 @@ export default {
         reasoning = strategy?.reasoning ?? '';
       }
 
+      const payload = buildLoginPayload(options.targetUserId, {
+        ip_address: parameters.ip,
+        user_agent: parameters.userAgent,
+        ...(parameters.deviceFingerprint
+          ? { device_fingerprint: parameters.deviceFingerprint }
+          : {}),
+      });
+
+      // Record what was actually sent, not what was asked for. A parameter the
+      // strategy left unset is filled in by the payload builder, and the
+      // attacker has to see that value: round 1 never names a fingerprint, so
+      // without this the history said `null` and the device the defender
+      // challenged could never be replayed. It also makes an omitted key mean
+      // "keep it" rather than silently rotating it every round.
+      parameters = {
+        ...parameters,
+        ip: payload.ip_address,
+        userAgent: payload.user_agent,
+        deviceFingerprint: payload.device_fingerprint,
+      };
+
       // Emit the adaptation BEFORE sending — this is the demo moment.
       emit({
         type: 'attacker_adapts',
@@ -118,14 +148,6 @@ export default {
         timestamp: Date.now(),
       });
       results.strategyHistory.push({ round, reasoning, parameters });
-
-      const payload = buildLoginPayload(options.targetUserId, {
-        ip_address: parameters.ip,
-        user_agent: parameters.userAgent,
-        ...(parameters.deviceFingerprint
-          ? { device_fingerprint: parameters.deviceFingerprint }
-          : {}),
-      });
 
       const t0 = Date.now();
       emit({ type: 'attempt', round, payload, timestamp: t0 });

@@ -3,8 +3,8 @@
  *
  * Configurable for any target's response shape via the `responseMap` function.
  * This is the key flexibility point that keeps fraud-sim target-agnostic:
- * a user testing against Stripe Radar writes a different responseMap than
- * one testing against an in-house system.
+ * a target that answers `{ action: 'deny' }` writes a different responseMap
+ * than one that answers `{ decision: 'BLOCK' }`.
  *
  * @example
  *   const target = httpAdapter({

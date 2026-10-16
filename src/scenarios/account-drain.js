@@ -45,7 +45,7 @@ export default {
     // to completion against a correctly configured system and the run reports
     // a failure that is really just an under-powered attack. Lower this to
     // find where a specific target's amount thresholds actually sit.
-    amountKobo: 12000000,
+    amountMinor: 12000000,
     delayBetweenWithdrawalsMs: 15000, // 15 seconds
     postLoginPauseMs: 30000, // 30 seconds — attackers move fast after password change
     skipPasswordChange: false,
@@ -163,7 +163,7 @@ export default {
       const wdPayload = buildWithdrawalPayload(
         options.targetUserId,
         {
-          amount: options.amountKobo,
+          amount: options.amountMinor,
           is_new_payee: true,
         },
         {

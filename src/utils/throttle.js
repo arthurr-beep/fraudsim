@@ -33,7 +33,22 @@ export function throttleTarget(target, maxPerSecond, hooks = {}) {
     throw new Error(`maxRequestsPerSecond must be greater than 0, received: ${maxPerSecond}`);
   }
 
-  const limiter = rateLimiter(maxPerSecond, hooks);
+  return applyLimiter(target, rateLimiter(maxPerSecond, hooks));
+}
+
+/**
+ * Wrap a target with an already-constructed limiter.
+ *
+ * Separate from `throttleTarget` because several concurrent runs need to share
+ * a single limiter instance: one limiter per run would let the effective rate
+ * scale with the concurrency, which is the opposite of what a ceiling is for.
+ *
+ * @param {object} target
+ * @param {() => Promise<void>} limiter - From `rateLimiter()`.
+ * @param {(waitMs: number) => void} [onThrottle] - Per-run accounting.
+ * @returns {object}
+ */
+export function applyLimiter(target, limiter, onThrottle) {
   const wrapped = Object.create(Object.getPrototypeOf(target) ?? Object.prototype);
 
   // Copy anything the adapter exposes that we are not wrapping — test helpers
@@ -46,7 +61,10 @@ export function throttleTarget(target, maxPerSecond, hooks = {}) {
   for (const method of SCORING_METHODS) {
     if (typeof target[method] !== 'function') continue;
     wrapped[method] = async (...args) => {
+      const t0 = Date.now();
       await limiter();
+      const waited = Date.now() - t0;
+      if (waited > 0) onThrottle?.(waited);
       return target[method](...args);
     };
   }

@@ -41,7 +41,7 @@ export default {
   defaultOptions: {
     targetUserId: null, // required
     benignActionsBeforeHijack: 2, // the victim's own activity first
-    amountKobo: 20000000, // NGN 200,000 once the session is stolen
+    amountMinor: 20000000, // NGN 200,000 once the session is stolen
     withdrawAfterHijack: true,
     hijackFromPersona: 'foreign', // where the stolen session is replayed from
     delayMs: 150,
@@ -186,7 +186,7 @@ export default {
       method: 'scoreWithdrawal',
       payload: buildWithdrawalPayload(
         options.targetUserId,
-        { amount: options.amountKobo },
+        { amount: options.amountMinor },
         {
           session_id: sessionId,
           device_fingerprint: attacker.device,
@@ -207,13 +207,13 @@ export default {
       emit({
         type: 'milestone',
         message:
-          `Withdrawal of NGN ${(options.amountKobo / 100).toLocaleString()} allowed on a session ` +
+          `Withdrawal of NGN ${(options.amountMinor / 100).toLocaleString()} allowed on a session ` +
           'whose device and network both changed mid-flight — session continuity is not being scored',
         timestamp: Date.now(),
       });
     }
 
-    return finalise(results, results.hijackDetected, options.amountKobo);
+    return finalise(results, results.hijackDetected, options.amountMinor);
   },
 };
 
@@ -223,12 +223,12 @@ function pickIp(persona) {
   return { ip, intel };
 }
 
-function finalise(results, detected, amountKobo = 0) {
+function finalise(results, detected, amountMinor = 0) {
   const succeeded = results.withdrawalDecision === 'ALLOW';
   return {
     ...results,
     hijackDetected: detected,
     attackerSucceeded: succeeded,
-    estimatedLossKobo: succeeded ? amountKobo : 0,
+    estimatedLossKobo: succeeded ? amountMinor : 0,
   };
 }

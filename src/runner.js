@@ -16,8 +16,8 @@
  *     Every concrete behaviour lives in a scenario or an adapter.
  */
 
-import { withSeed } from './utils/random-source.js';
-import { throttleTarget } from './utils/throttle.js';
+import { withSeed, withLocale } from './utils/random-source.js';
+import { throttleTarget, applyLimiter } from './utils/throttle.js';
 
 /**
  * Ceiling on outbound requests per second, applied to every scenario unless
@@ -31,18 +31,38 @@ export class Runner {
   async run(scenario, config) {
     const startedAt = Date.now();
 
-    assertKnownOptions(scenario, config.options);
+    // Deprecation notices are collected before `emit` exists and flushed once
+    // it does, so option migration can happen before validation.
+    const deprecations = [];
+    const emitDeprecation = (message) => deprecations.push(message);
+
+    const userOptions = migrateLegacyOptions(scenario, config.options, emitDeprecation);
+    assertKnownOptions(scenario, userOptions);
 
     const options = {
       ...(scenario.defaultOptions ?? {}),
-      ...(config.options ?? {}),
+      ...userOptions,
     };
 
     const onEvent = config.onEvent ?? (() => {});
     const signal = config.signal ?? new AbortController().signal;
 
+    // Every scored response already flows through `emit`, so the runner can
+    // collect latency and reason-code data without any scenario cooperating —
+    // and a scenario cannot forget to report it.
+    const latencies = [];
+    const reasonCounts = new Map();
+
     // Wrap onEvent so we never let a buggy subscriber crash the runner.
     const emit = (event) => {
+      if (event?.type === 'response') {
+        if (Number.isFinite(event.latencyMs)) latencies.push(event.latencyMs);
+        for (const reason of event.response?.reasons ?? []) {
+          const code = typeof reason === 'string' ? reason : reason?.code;
+          if (code) reasonCounts.set(code, (reasonCounts.get(code) ?? 0) + 1);
+        }
+      }
+
       try {
         onEvent(event);
       } catch (err) {
@@ -52,16 +72,24 @@ export class Runner {
       }
     };
 
+    for (const message of deprecations) {
+      emit({ type: 'warning', message, timestamp: Date.now() });
+    }
+
     const maxRequestsPerSecond =
       config.maxRequestsPerSecond ?? DEFAULT_MAX_REQUESTS_PER_SECOND;
 
     let throttledMs = 0;
-    const target = throttleTarget(config.target, maxRequestsPerSecond, {
-      onThrottle: (waitMs) => {
-        throttledMs += waitMs;
-      },
-      signal,
-    });
+    const onThrottle = (waitMs) => {
+      throttledMs += waitMs;
+    };
+
+    // When several scenarios run in parallel they must share one limiter, or
+    // the ceiling multiplies by the concurrency and "25 requests a second"
+    // quietly becomes a hundred. runSuite passes its shared limiter down.
+    const target = config.limiter
+      ? applyLimiter(config.target, config.limiter, onThrottle)
+      : throttleTarget(config.target, maxRequestsPerSecond, { onThrottle, signal });
 
     const context = {
       options,
@@ -83,10 +111,14 @@ export class Runner {
     try {
       // A seeded run installs its generator for the whole scenario, across
       // every await inside it. Unseeded runs use the system source.
-      report =
+      // Market first, then seed — both are ambient for the whole scenario,
+      // including across every await inside it.
+      const execute = () =>
         config.seed != null
-          ? await withSeed(config.seed, () => scenario.run(context))
-          : await scenario.run(context);
+          ? withSeed(config.seed, () => scenario.run(context))
+          : scenario.run(context);
+
+      report = config.locale != null ? await withLocale(config.locale, execute) : await execute();
     } catch (err) {
       emit({
         type: 'error',
@@ -105,12 +137,16 @@ export class Runner {
     const merged = {
       scenarioId: scenario.id,
       scenarioName: scenario.name,
+      // 'attack' or 'legitimate'. Reporting reads a block as a success on one
+      // and a false positive on the other, so every report has to say which.
+      traffic: scenario.traffic ?? 'attack',
       startedAt,
       completedAt: Date.now(),
       durationMs: Date.now() - startedAt,
       // Present only when seeded, so a report never implies reproducibility
       // it does not have.
       ...(config.seed != null ? { seed: config.seed } : {}),
+      ...(config.locale != null ? { locale: localeIdOf(config.locale) } : {}),
       ...report, // scenarios can add custom fields
     };
 
@@ -138,6 +174,19 @@ export class Runner {
       blockRate: scoredAttempts > 0 ? blocked / scoredAttempts : 0,
       stepUpRate: scoredAttempts > 0 ? stepUp / scoredAttempts : 0,
       errorRate: attempts > 0 ? errors / attempts : 0,
+      latency: summariseLatency(latencies),
+      // Amounts are minor-unit integers (kobo, cents — structurally the same),
+      // so the neutral name is the canonical one. The naira-flavoured original
+      // is kept because scenarios and downstream callers already use it.
+      ...(merged.estimatedLossKobo != null
+        ? { estimatedLossMinor: merged.estimatedLossKobo }
+        : {}),
+      // Which signals actually fired, most frequent first. The cheapest way to
+      // see whether a rule is earning its place — a code that never appears
+      // across a full suite is either misconfigured or dead.
+      reasonCounts: Object.fromEntries(
+        [...reasonCounts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      ),
     };
 
     if (throttledMs > 0) {
@@ -249,4 +298,73 @@ function editDistance(a, b) {
   }
 
   return previous[b.length];
+}
+
+/**
+ * Latency percentiles over the run's scored responses.
+ *
+ * Nearest-rank on a sorted copy — no interpolation, so every reported figure is
+ * a latency that actually occurred rather than an average of two that didn't.
+ */
+function summariseLatency(samples) {
+  if (samples.length === 0) {
+    return { count: 0, min: null, p50: null, p95: null, p99: null, max: null };
+  }
+
+  const sorted = [...samples].sort((a, b) => a - b);
+  const at = (p) => sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)];
+
+  return {
+    count: sorted.length,
+    min: sorted[0],
+    p50: at(50),
+    p95: at(95),
+    p99: at(99),
+    max: sorted[sorted.length - 1],
+  };
+}
+
+/** Report the locale as its id, whether it was passed as a code or a pack. */
+function localeIdOf(locale) {
+  return typeof locale === 'string' ? locale.toUpperCase() : (locale?.id ?? 'custom');
+}
+
+/**
+ * Options renamed when the library stopped assuming naira.
+ *
+ * Amounts were always minor-unit integers — kobo and cents are structurally the
+ * same — so only the names were currency-specific. The old names keep working
+ * because the option validator would otherwise reject them outright, turning a
+ * rename into a hard break for every existing caller.
+ */
+const LEGACY_OPTIONS = {
+  amountKobo: 'amountMinor',
+  amountJitterKobo: 'amountJitterMinor',
+  amountPerMuleKobo: 'amountPerMuleMinor',
+  microAmountKobo: 'microAmountMinor',
+  largeAmountKobo: 'largeAmountMinor',
+  bonusKobo: 'bonusMinor',
+};
+
+function migrateLegacyOptions(scenario, userOptions, warn) {
+  if (!userOptions) return userOptions;
+
+  const declared = scenario.defaultOptions ?? {};
+  let migrated = null;
+
+  for (const [legacy, current] of Object.entries(LEGACY_OPTIONS)) {
+    if (!(legacy in userOptions) || !(current in declared)) continue;
+
+    migrated ??= { ...userOptions };
+    // An explicit new-style value wins; the legacy one is ignored, not merged.
+    if (!(current in userOptions)) migrated[current] = userOptions[legacy];
+    delete migrated[legacy];
+
+    warn(
+      `Option "${legacy}" is deprecated — use "${current}". Amounts are minor-unit ` +
+        "integers in whichever currency the run's locale specifies, so the value is unchanged."
+    );
+  }
+
+  return migrated ?? userOptions;
 }
