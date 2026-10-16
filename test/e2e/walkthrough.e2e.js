@@ -235,11 +235,30 @@ async function attackRounds(target, victim, llm) {
     const paintDecision = DECISION_COLOUR[decision] ?? ((s) => s);
     const codes = (response?.reasons ?? []).map((r) => r.code).join(', ') || '—';
     log(`\n  ${c.dim(`round ${String(round).padStart(2)}`)}  ${paintDecision(decision.padEnd(8))}${c.dim(codes)}`);
-    log(`            ${c.dim(`↳ ${why}`)}`);
+    // Wrapped at a word, under the arrow: a terminal breaks a long line
+    // mid-word, which is hard to read and worse on a recording.
+    wrap(`↳ ${why}`, Math.max(60, (process.stdout.columns || 110) - 14)).forEach((line, i) =>
+      log(`            ${c.dim(i === 0 ? line : `  ${line}`)}`)
+    );
     await pause();
   }
 
   return report;
+}
+
+function wrap(text, width) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
 /**
