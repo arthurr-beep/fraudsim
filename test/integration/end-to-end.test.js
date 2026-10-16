@@ -173,7 +173,7 @@ test('end-to-end: account-drain triggers DRAIN_PATTERN on the third new payee', 
     options: {
       targetUserId: 'victim_user_e2e_2',
       withdrawalCount: 10,
-      amountKobo: 500000, // below high-amount threshold so we test pure drain detection
+      amountMinor: 500000, // below high-amount threshold so we test pure drain detection
       delayBetweenWithdrawalsMs: 0,
       postLoginPauseMs: 0,
     },

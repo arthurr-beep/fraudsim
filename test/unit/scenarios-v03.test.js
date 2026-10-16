@@ -118,7 +118,7 @@ test('promo-abuse records where the first block landed', async () => {
 test('promo-abuse counts bonuses only when the claim is allowed', async () => {
   const report = await run('promo-abuse', {
     target: permissive(),
-    options: { accountCount: 5, bonusKobo: 100000, delayMs: 0 },
+    options: { accountCount: 5, bonusMinor: 100000, delayMs: 0 },
   });
 
   assert.equal(report.bonusesClaimed, 5);
@@ -222,10 +222,10 @@ test('slow-drain flags that its timing is simulated', async () => {
 test('slow-drain reports how much escaped before the first block', async () => {
   const open = await run('slow-drain', {
     target: permissive(),
-    options: { targetUserId: 'v', withdrawalCount: 8, amountKobo: 1000000, amountJitterKobo: 0, delayMs: 0 },
+    options: { targetUserId: 'v', withdrawalCount: 8, amountMinor: 1000000, amountJitterMinor: 0, delayMs: 0 },
   });
   assert.equal(open.firstBlockedAtWithdrawal, null);
-  assert.equal(open.drainedKobo, 8000000);
+  assert.equal(open.drainedMinor, 8000000);
   assert.equal(open.attackerSucceeded, true);
 
   const shut = await run('slow-drain', {
@@ -233,7 +233,7 @@ test('slow-drain reports how much escaped before the first block', async () => {
     options: { targetUserId: 'v', withdrawalCount: 8, delayMs: 0 },
   });
   assert.equal(shut.firstBlockedAtWithdrawal, 1);
-  assert.equal(shut.drainedKobo, 0);
+  assert.equal(shut.drainedMinor, 0);
   assert.equal(shut.attackerSucceeded, false);
 });
 
@@ -262,7 +262,7 @@ test('session-hijack keeps one session id while the device changes', async () =>
 test('session-hijack reports an undetected hijack as attacker success', async () => {
   const report = await run('session-hijack', {
     target: permissive(),
-    options: { targetUserId: 'v', amountKobo: 5000000, delayMs: 0 },
+    options: { targetUserId: 'v', amountMinor: 5000000, delayMs: 0 },
   });
 
   assert.equal(report.hijackDetected, false);

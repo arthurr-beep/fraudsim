@@ -22,6 +22,7 @@
 import { sleep } from '../utils/sleep.js';
 import { buildLoginPayload } from '../utils/faker-helpers.js';
 import { deterministic } from '../llm/deterministic.js';
+import { randomInt } from '../utils/random.js';
 
 export default {
   id: 'adaptive-attacker',
@@ -45,8 +46,13 @@ export default {
       throw new Error('adaptive-attacker requires options.targetUserId');
     }
 
-    // Fall back to a seeded deterministic provider when no LLM is supplied.
-    const llm = ctx.llm ?? deterministic({ seed: 42 });
+    // Fall back to the deterministic provider when no LLM is supplied. Its seed
+    // is drawn from the run's own random source rather than being hardcoded:
+    // under a seeded run that makes the strategy sequence reproducible, and it
+    // makes two different run seeds actually produce different attacks. A fixed
+    // provider seed would have made every seeded run of this scenario identical
+    // no matter what seed the caller passed.
+    const llm = ctx.llm ?? deterministic({ seed: randomInt(1, 2 ** 31 - 1) });
 
     const results = {
       attempts: 0,

@@ -43,7 +43,7 @@ export default {
   defaultOptions: {
     targetUserId: null, // required
     minutesSincePort: 20, // how recently the number was ported
-    amountKobo: 40000000, // NGN 400,000 — SIM swaps target high-value accounts
+    amountMinor: 40000000, // NGN 400,000 — SIM swaps target high-value accounts
     reportPortEvent: true, // tell the target about the port, if it accepts one
     attemptPasswordReset: true,
     ipPersona: 'domestic', // SIM swappers are usually in-country
@@ -194,7 +194,7 @@ export default {
     // ── Stage 3: immediate high-value withdrawal ────────────────────────
     emit({
       type: 'milestone',
-      message: `Withdrawing NGN ${(options.amountKobo / 100).toLocaleString()} minutes after the port`,
+      message: `Withdrawing NGN ${(options.amountMinor / 100).toLocaleString()} minutes after the port`,
       timestamp: Date.now(),
     });
 
@@ -203,7 +203,7 @@ export default {
       method: 'scoreWithdrawal',
       payload: buildWithdrawalPayload(
         options.targetUserId,
-        { amount: options.amountKobo },
+        { amount: options.amountMinor },
         {
           session_id: attacker.session,
           device_fingerprint: attacker.device,
@@ -244,7 +244,7 @@ function finalise(results, options, clock) {
   return {
     ...results,
     attackerSucceeded: succeeded,
-    estimatedLossKobo: succeeded ? options.amountKobo : 0,
+    estimatedLossKobo: succeeded ? options.amountMinor : 0,
     // Which stage first pushed back. `null` means the whole chain succeeded.
     blockedAtStage: results.blockedAtStage,
     simulatedTime: true,

@@ -86,7 +86,7 @@ This document describes each scenario `fraud-sim` ships, what real-world attack 
 | `targetUserId` | (required) | The user whose account is drained |
 | `attackerIp` | random | Override the attacker's IP |
 | `withdrawalCount` | 5 | Number of withdrawals to attempt |
-| `amountKobo` | 12,000,000 | NGN 120,000 per withdrawal. Chosen to clear the "new payee, high amount" (~NGN 50,000) and "large amount, new device" (~NGN 100,000) gates most engines ship with; the old NGN 45,000 default cleared neither |
+| `amountMinor` | 12,000,000 | NGN 120,000 per withdrawal. Chosen to clear the "new payee, high amount" (~NGN 50,000) and "large amount, new device" (~NGN 100,000) gates most engines ship with; the old NGN 45,000 default cleared neither |
 | `delayBetweenWithdrawalsMs` | 15,000 | 15 seconds between withdrawals |
 | `postLoginPauseMs` | 30,000 | Wait between password change and first withdrawal |
 | `skipPasswordChange` | false | Skip the password change step (useful for testing without that signal) |
@@ -150,8 +150,8 @@ velocity, CNP patterns, decline-rate monitoring.
 | `attackerUserId` | `'card_tester_001'` | Merchant-side account doing the probing |
 | `cardCount` | 60 | Distinct cards in the stolen list |
 | `binCount` | 3 | BIN ranges the list is drawn from — few is the tell |
-| `microAmountKobo` | 5,000 | NGN 50 probe |
-| `largeAmountKobo` | 15,000,000 | NGN 150,000 once a card is known good |
+| `microAmountMinor` | 5,000 | NGN 50 probe |
+| `largeAmountMinor` | 15,000,000 | NGN 150,000 once a card is known good |
 | `escalateAfter` | 1 | Approvals before attempting the real charge |
 | `reuseIp` | true | Card testers run from one host until it stops working |
 | `delayMs` | 80 | Pause between probes |
@@ -185,7 +185,7 @@ clustering, referral graph anomalies, payout concentration.
 | Option | Default | Description |
 |---|---|---|
 | `accountCount` | 40 | Accounts to farm |
-| `bonusKobo` | 200,000 | NGN 2,000 per signup |
+| `bonusMinor` | 200,000 | NGN 2,000 per signup |
 | `deviceCount` | 3 | Distinct fingerprints spread across all accounts |
 | `subnetCount` | 2 | Distinct /24s the signups come from |
 | `sharedPayoutAccount` | generated | Where every account cashes out |
@@ -221,15 +221,15 @@ fan-in concentration, dormancy-then-activity.
 |---|---|---|
 | `sourceUserId` | (required) | The compromised or complicit origin |
 | `muleCount` | 8 | Intermediary accounts |
-| `amountPerMuleKobo` | 30,000,000 | NGN 300,000 to each mule |
+| `amountPerMuleMinor` | 30,000,000 | NGN 300,000 to each mule |
 | `retentionRatio` | 0.05 | The cut each mule keeps |
 | `finalDestinationAccount` | generated | Where the money ends up |
 | `forwardDelayMinutes` | 45 | Simulated gap before forwarding |
 | `delayMs` | 100 | Wall-clock pacing |
 | `maxTotalAttempts` | 100 | Hard ceiling |
 
-**Report fields:** `fanOutTransfers`, `forwardTransfers`, `totalMovedKobo`,
-`reachedDestinationKobo`, `passThroughRatio`, `muleAccounts`,
+**Report fields:** `fanOutTransfers`, `forwardTransfers`, `totalMovedMinor`,
+`reachedDestinationMinor`, `passThroughRatio`, `muleAccounts`,
 `finalDestinationAccount`.
 
 A system scoring transactions one at a time, with no memory of the graph, will
@@ -258,14 +258,14 @@ payee-diversity anomalies.
 |---|---|---|
 | `targetUserId` | (required) | The account being drained |
 | `withdrawalCount` | 20 | Number of withdrawals |
-| `amountKobo` | 2,500,000 | NGN 25,000 — deliberately modest |
-| `amountJitterKobo` | 500,000 | Vary amounts so they don't look scripted |
+| `amountMinor` | 2,500,000 | NGN 25,000 — deliberately modest |
+| `amountJitterMinor` | 500,000 | Vary amounts so they don't look scripted |
 | `intervalMinutes` | 300 | 5 simulated hours between withdrawals |
 | `sameDevice` | true | A patient attacker keeps one stable device |
 | `delayMs` | 60 | Wall-clock pacing only |
 | `maxTotalAttempts` | 100 | Hard ceiling |
 
-**Report fields:** `withdrawalsAttempted`, `drainedKobo`,
+**Report fields:** `withdrawalsAttempted`, `drainedMinor`,
 `firstBlockedAtWithdrawal`, `firstStepUpAtWithdrawal`, `simulatedTime`,
 `simulatedSpan`.
 
@@ -293,7 +293,7 @@ re-authentication on sensitive actions.
 |---|---|---|
 | `targetUserId` | (required) | The victim |
 | `benignActionsBeforeHijack` | 2 | The victim's own activity first |
-| `amountKobo` | 20,000,000 | NGN 200,000 once the session is stolen |
+| `amountMinor` | 20,000,000 | NGN 200,000 once the session is stolen |
 | `withdrawAfterHijack` | true | Attempt the cash-out |
 | `hijackFromPersona` | `'foreign'` | Where the stolen session is replayed from |
 | `delayMs` | 150 | Pause between stages |
@@ -330,7 +330,7 @@ attacker cannot port.
 |---|---|---|
 | `targetUserId` | (required) | The victim |
 | `minutesSincePort` | 20 | How recently the number was ported |
-| `amountKobo` | 40,000,000 | NGN 400,000 — SIM swaps target high-value accounts |
+| `amountMinor` | 40,000,000 | NGN 400,000 — SIM swaps target high-value accounts |
 | `reportPortEvent` | true | Tell the target about the port, if it accepts one |
 | `attemptPasswordReset` | true | Include the reset stage |
 | `ipPersona` | `'domestic'` | SIM swappers are usually in-country |

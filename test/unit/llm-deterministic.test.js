@@ -76,3 +76,39 @@ test('empty history on round 1 gives a baseline reasoning', async () => {
   });
   assert.match(strategy.reasoning, /baseline/i);
 });
+
+test('an IP reason outranks the new-device reason that always accompanies it', async () => {
+  // A rotating attacker sees NEW_DEVICE on every response, because rotating is
+  // what creates it. If device won the classification, the attacker would
+  // announce it was changing fingerprint while the address was what blocked it.
+  const strategy = await deterministic({ seed: 7 }).generateStrategy({
+    ...baseInput,
+    history: [
+      {
+        round: 1,
+        decision: 'BLOCK',
+        reasons: [{ code: 'IP_KNOWN_ABUSIVE' }, { code: 'NEW_DEVICE' }],
+      },
+    ],
+  });
+
+  assert.match(strategy.reasoning, /IP-related/);
+  assert.match(strategy.reasoning, /fresh IP address/);
+});
+
+test('the reasoning says challenged when the attempt was stepped up', async () => {
+  const provider = deterministic({ seed: 7 });
+
+  const challenged = await provider.generateStrategy({
+    ...baseInput,
+    history: [{ round: 1, decision: 'STEP_UP', reasons: [{ code: 'NEW_DEVICE' }] }],
+  });
+  assert.match(challenged.reasoning, /was challenged/);
+  assert.ok(!/was blocked/.test(challenged.reasoning));
+
+  const blocked = await provider.generateStrategy({
+    ...baseInput,
+    history: [{ round: 1, decision: 'BLOCK', reasons: [{ code: 'NEW_DEVICE' }] }],
+  });
+  assert.match(blocked.reasoning, /was blocked/);
+});

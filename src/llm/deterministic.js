@@ -66,6 +66,11 @@ export function deterministic(config = {}) {
       const reasonCodes = extractReasonCodes(lastAttempt);
       const category = classify(reasonCodes);
 
+      // A step-up is not a block, and saying so matters: the reasoning is read
+      // by a human in a report, and an attacker that mis-describes what just
+      // happened to it does not look like it is reasoning at all.
+      const outcome = lastAttempt?.decision === 'STEP_UP' ? 'challenged' : 'blocked';
+
       const parameters = {
         ip: rng.ip(),
         deviceFingerprint: rng.alphanumeric(32),
@@ -76,15 +81,15 @@ export function deterministic(config = {}) {
       let reasoning;
       switch (category) {
         case 'ip':
-          reasoning = `Last attempt was blocked on an IP-related reason (${reasonCodes.join(', ')}). Rotating to a fresh IP address.`;
+          reasoning = `Last attempt was ${outcome} on an IP-related reason (${reasonCodes.join(', ')}). Rotating to a fresh IP address.`;
           break;
         case 'device':
-          reasoning = `Last attempt was blocked on a device-related reason (${reasonCodes.join(', ')}). Rotating the device fingerprint and user agent.`;
+          reasoning = `Last attempt was ${outcome} on a device-related reason (${reasonCodes.join(', ')}). Rotating the device fingerprint and user agent.`;
           break;
         case 'velocity':
           // Velocity blocks: slow down AND change IP to dodge rate limits.
           parameters.delayMs = rng.int(5000, 15000);
-          reasoning = `Last attempt was blocked on a velocity-related reason (${reasonCodes.join(', ')}). Waiting longer between attempts and changing IP.`;
+          reasoning = `Last attempt was ${outcome} on a velocity-related reason (${reasonCodes.join(', ')}). Waiting longer between attempts and changing IP.`;
           break;
         case 'none':
           reasoning =
@@ -93,7 +98,7 @@ export function deterministic(config = {}) {
               : 'No clear block pattern to react to. Randomising all attributes to probe for gaps.';
           break;
         default:
-          reasoning = `Blocked for an unrecognised reason (${reasonCodes.join(', ')}). Randomising all attributes.`;
+          reasoning = `${outcome === 'challenged' ? 'Challenged' : 'Blocked'} for an unrecognised reason (${reasonCodes.join(', ')}). Randomising all attributes.`;
       }
 
       return { reasoning, parameters };
@@ -116,10 +121,19 @@ function classify(reasonCodes) {
       return signals.some((sig) => upper.includes(sig));
     });
 
-  // Velocity and device are checked before IP because velocity codes can also
-  // mention IP (e.g. IP_VELOCITY) and the velocity response is the stronger one.
+  // Order is by how *actionable* the signal is, not how severe it looks.
+  //
+  // Velocity first: those codes often also mention IP (IP_VELOCITY), and the
+  // velocity response — slow down — is the stronger move.
+  //
+  // Then IP before device. A defence that reports NEW_DEVICE alongside an IP
+  // reason is not telling the attacker anything it can act on: the device is
+  // unrecognised *because* the attacker rotated it, and it will be unrecognised
+  // again next round no matter what. The IP is the part that can actually be
+  // changed for the better. Checking device first made the attacker announce it
+  // was rotating a fingerprint while the thing blocking it was the address.
   if (matches(VELOCITY_SIGNALS)) return 'velocity';
-  if (matches(DEVICE_SIGNALS)) return 'device';
   if (matches(IP_SIGNALS)) return 'ip';
+  if (matches(DEVICE_SIGNALS)) return 'device';
   return 'unknown';
 }

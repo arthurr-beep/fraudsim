@@ -57,11 +57,13 @@ export {
   randomLast4,
   newCardToken,
   DEMO_IP_POOL,
+  demoIpPool,
   pickDemoIp,
 } from './random.js';
 
 // ── reproducibility ─────────────────────────────────────────────────────
 // `withSeed` is exported for tooling that needs to seed something outside a
 // scenario run; inside a run the runner has already installed the source.
-export { withSeed, isSeeded } from './random-source.js';
+export { withSeed, isSeeded, withLocale, currentLocale } from './random-source.js';
+export { LOCALES, localeIds, resolveLocale, DEFAULT_LOCALE } from '../locales/index.js';
 export { DeterministicRng } from './rng.js';

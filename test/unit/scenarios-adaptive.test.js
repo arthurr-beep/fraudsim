@@ -101,3 +101,24 @@ test('each round is informed by previous rounds (adaptation)', async () => {
   // Round 1 is hardcoded (no LLM call); rounds 2,3,4 call with growing history.
   assert.deepEqual(seenHistoryLengths, [1, 2, 3]);
 });
+
+test('the fallback provider is seeded from the run, so seeds change the attack', async () => {
+  // A hardcoded provider seed made every seeded run of this scenario identical
+  // regardless of the seed the caller passed — silently contradicting the
+  // reproducibility feature in the one scenario whose whole point is variation.
+  const fingerprint = async (seed) => {
+    const target = mockAdapter({
+      defaultResponse: { decision: 'BLOCK', reasons: [{ code: 'IP_REPUTATION' }] },
+    });
+    await run('adaptive-attacker', {
+      target,
+      options: { targetUserId: 'v', maxRounds: 4, delayMs: 0 },
+      seed,
+      maxRequestsPerSecond: Infinity,
+    });
+    return target._calls('scoreLogin').map((c) => c.ip_address).join(',');
+  };
+
+  assert.equal(await fingerprint(1), await fingerprint(1), 'same seed must replay');
+  assert.notEqual(await fingerprint(1), await fingerprint(2), 'different seeds must differ');
+});

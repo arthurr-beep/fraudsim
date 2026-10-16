@@ -16,34 +16,10 @@
  * out of that, so none of them do.
  */
 
-import { randomFloat } from './random-source.js';
+import { randomFloat, currentLocale } from './random-source.js';
+import { resolveLocale } from '../locales/index.js';
 
 const ALPHANUM = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-
-const NIGERIAN_BANKS = [
-  'GTBank',
-  'UBA',
-  'Access',
-  'Zenith',
-  'First Bank',
-  'FCMB',
-  'Sterling',
-  'Stanbic IBTC',
-  'Fidelity',
-  'Wema',
-];
-
-const FIRST_NAMES = [
-  'Adaeze', 'Chinedu', 'Folake', 'Tunde', 'Aisha', 'Emeka', 'Nkechi', 'Bayo',
-  'Ngozi', 'Olumide', 'Funmi', 'Kayode', 'Hauwa', 'Ifeanyi', 'Toyin', 'Segun',
-  'James', 'Mary', 'David', 'Sarah', 'Michael', 'Grace', 'John', 'Esther',
-];
-
-const LAST_NAMES = [
-  'Adeyemi', 'Okonkwo', 'Ibrahim', 'Nwosu', 'Bello', 'Eze', 'Yusuf', 'Okoye',
-  'Lawal', 'Obi', 'Musa', 'Achebe', 'Akin', 'Adamu', 'Ojo', 'Chukwu',
-  'Smith', 'Brown', 'Williams', 'Johnson',
-];
 
 const USER_AGENTS = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -159,12 +135,7 @@ export function randomIp() {
  *   lat: number, lon: number, proxy: boolean, hosting: boolean,
  *   abuseScore: number, isp: string, persona: string}>}
  */
-export const DEMO_IP_POOL = Object.freeze([
-  // ── Domestic residential — the baseline a victim would normally log in from
-  f('192.0.2.10', 'NG', 'Nigeria', 6.5244, 3.3792, false, false, 0, 'Simulated Residential ISP (Lagos)', 'domestic'),
-  f('192.0.2.11', 'NG', 'Nigeria', 9.0765, 7.3986, false, false, 0, 'Simulated Residential ISP (Abuja)', 'domestic'),
-  f('192.0.2.12', 'NG', 'Nigeria', 4.8156, 7.0498, false, false, 2, 'Simulated Mobile Carrier (Port Harcourt)', 'domestic'),
-
+const FOREIGN_POOL = Object.freeze([
   // ── Datacenter / hosting — bot traffic rarely comes from a living room
   f('198.51.100.20', 'NL', 'Netherlands', 52.3676, 4.9041, false, true, 78, 'Simulated Cloud Hosting (Amsterdam)', 'hosting'),
   f('198.51.100.21', 'DE', 'Germany', 50.1109, 8.6821, false, true, 84, 'Simulated Cloud Hosting (Frankfurt)', 'hosting'),
@@ -181,6 +152,45 @@ export const DEMO_IP_POOL = Object.freeze([
   f('203.0.113.41', 'IN', 'India', 19.076, 72.8777, false, false, 8, 'Simulated Residential ISP (Mumbai)', 'foreign'),
 ]);
 
+/**
+ * Domestic entries for the active market.
+ *
+ * "Domestic" only means anything relative to a market: an address in Lagos is
+ * the quiet baseline for a Nigerian bank and a new-country signal for a British
+ * one. These are generated from the locale's cities so the pool means the same
+ * thing wherever the tool is pointed.
+ */
+function domesticEntries(locale) {
+  return locale.cities.map((place, i) =>
+    f(
+      `192.0.2.${10 + i}`,
+      locale.id,
+      locale.name,
+      place.lat,
+      place.lon,
+      false,
+      false,
+      0,
+      `Simulated Residential ISP (${place.city})`,
+      'domestic'
+    )
+  );
+}
+
+/**
+ * The attacker IP pool for the run's market: domestic entries from the active
+ * locale, plus the fixed set of hosting, proxy and foreign exits.
+ *
+ * Exposed as a getter so it tracks the locale in scope without callers having
+ * to pass one. `demoIpPool()` is the explicit form.
+ */
+export function demoIpPool(locale) {
+  return Object.freeze([
+    ...domesticEntries(locale ?? currentLocale()),
+    ...FOREIGN_POOL,
+  ]);
+}
+
 /** Compact constructor for DEMO_IP_POOL rows — keeps the table above readable. */
 function f(ip, countryCode, country, lat, lon, proxy, hosting, abuseScore, isp, persona) {
   return Object.freeze({ ip, countryCode, country, lat, lon, proxy, hosting, abuseScore, isp, persona });
@@ -193,8 +203,9 @@ function f(ip, countryCode, country, lat, lon, proxy, hosting, abuseScore, isp, 
  * @returns {(typeof DEMO_IP_POOL)[number]}
  */
 export function pickDemoIp(persona = 'any') {
-  if (persona === 'any') return pickOne(DEMO_IP_POOL);
-  const matches = DEMO_IP_POOL.filter((entry) => entry.persona === persona);
+  const pool = demoIpPool();
+  if (persona === 'any') return pickOne(pool);
+  const matches = pool.filter((entry) => entry.persona === persona);
   if (matches.length === 0) {
     throw new Error(
       `Unknown IP persona: "${persona}". Expected one of: any, domestic, hosting, proxy, foreign.`
@@ -257,12 +268,9 @@ export function ipInSameSubnet(ip) {
   return `${octets[0]}.${octets[1]}.${octets[2]}.${randomInt(1, 254)}`;
 }
 
-/** A plausible synthetic phone number in Nigerian mobile format. */
+/** A subscriber number in the active market's format. */
 export function randomPhoneNumber() {
-  const prefixes = ['0803', '0806', '0703', '0705', '0813', '0816', '0906', '0913'];
-  let rest = '';
-  for (let i = 0; i < 7; i++) rest += randomInt(0, 9).toString();
-  return `${pickOne(prefixes)}${rest}`;
+  return currentLocale().phoneNumber(randomFloat);
 }
 
 /**
@@ -273,28 +281,24 @@ export function randomUserAgent() {
 }
 
 /**
- * Generate a synthetic Nigerian-style account number (10 digits).
+ * An account identifier shaped like the active market's — 10 digits in Nigeria,
+ * 8 in the UK, a variable length in the US. Format matters: a target that
+ * validates account numbers rejects a wrongly-shaped one before it ever scores
+ * it, and a run full of validation errors measures nothing.
  */
 export function randomAccountNumber() {
-  let out = '';
-  for (let i = 0; i < 10; i++) {
-    out += randomInt(0, 9).toString();
-  }
-  return out;
+  return currentLocale().accountNumber(randomFloat);
 }
 
-/**
- * Pick a Nigerian bank name.
- */
+/** A bank from the active market. */
 export function randomBank() {
-  return pickOne(NIGERIAN_BANKS);
+  return pickOne(currentLocale().banks);
 }
 
-/**
- * Generate a random full name.
- */
+/** A plausible name for the active market. Synthetic; nobody real. */
 export function randomFullName() {
-  return `${pickOne(FIRST_NAMES)} ${pickOne(LAST_NAMES)}`;
+  const locale = currentLocale();
+  return `${pickOne(locale.firstNames)} ${pickOne(locale.lastNames)}`;
 }
 
 /**
@@ -304,3 +308,12 @@ export function randomFullName() {
  * bypasses it will not replay when the run is seeded.
  */
 export { randomFloat } from './random-source.js';
+
+/**
+ * The pool for the market currently in scope.
+ *
+ * Retained as a named export because callers pre-date `demoIpPool()`; it is a
+ * snapshot of the default market rather than a live view, so a target
+ * pre-seeding intel for a non-default locale should call `demoIpPool()`.
+ */
+export const DEMO_IP_POOL = demoIpPool(resolveLocale());

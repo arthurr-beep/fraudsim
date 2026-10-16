@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomIp, pickDemoIp, DEMO_IP_POOL } from '../../src/utils/random.js';
+import { randomIp, pickDemoIp, DEMO_IP_POOL, demoIpPool } from '../../src/utils/random.js';
+import { localeIds, resolveLocale } from '../../src/locales/index.js';
 
 /**
  * Mirrors the reserved-range table in random.js. Kept as an independent
@@ -80,11 +81,13 @@ test('DEMO_IP_POOL covers every persona and has no duplicate addresses', () => {
   assert.equal(new Set(ips).size, ips.length, 'duplicate IP in pool');
 });
 
-test('DEMO_IP_POOL spans enough distance to exercise impossible-travel rules', () => {
-  // Those rules commonly trigger past ~500km. Domestic and foreign entries
-  // must be far enough apart for the rule to be reachable at all.
+test('foreign pool entries are far enough to exercise impossible-travel rules', () => {
+  // Only the `foreign` persona earns its place through distance. A `hosting`
+  // entry earns its place by being a datacenter — and in a US-market run a US
+  // datacenter is both legitimately close and legitimately suspicious, so
+  // requiring distance of it would be asserting the wrong property.
   const domestic = DEMO_IP_POOL.find((e) => e.persona === 'domestic');
-  const foreign = DEMO_IP_POOL.filter((e) => e.persona !== 'domestic');
+  const foreign = DEMO_IP_POOL.filter((e) => e.persona === 'foreign');
 
   const km = (a, b) => {
     const R = 6371;
@@ -119,4 +122,28 @@ test('pickDemoIp with no argument draws from the whole pool', () => {
 
 test('pickDemoIp rejects an unknown persona instead of silently returning nothing', () => {
   assert.throws(() => pickDemoIp('datacentre'), /Unknown IP persona/);
+});
+
+test('hosting and proxy entries carry the flags that make them suspicious', () => {
+  // These are the ones whose value is reputation rather than geography.
+  for (const entry of DEMO_IP_POOL.filter((e) => e.persona === 'hosting')) {
+    assert.equal(entry.hosting, true, `${entry.ip} is labelled hosting but not flagged`);
+  }
+  for (const entry of DEMO_IP_POOL.filter((e) => e.persona === 'proxy')) {
+    assert.equal(entry.proxy, true, `${entry.ip} is labelled proxy but not flagged`);
+  }
+});
+
+test('the pool follows the market, so "domestic" means the right country', () => {
+  // Lagos is the quiet baseline for a Nigerian bank and a new-country signal
+  // for a British one. A fixed pool would mean opposite things per market.
+  for (const id of localeIds()) {
+    const pool = demoIpPool(resolveLocale(id));
+    const domestic = pool.filter((e) => e.persona === 'domestic');
+
+    assert.ok(domestic.length > 0, `${id} has no domestic entries`);
+    for (const entry of domestic) {
+      assert.equal(entry.countryCode, id, `${id} pool has a domestic entry in ${entry.countryCode}`);
+    }
+  }
 });

@@ -20,6 +20,7 @@ import {
   randomPhoneNumber,
   pickOne,
 } from './random.js';
+import { currentLocale } from './random-source.js';
 
 export function newSessionId(prefix = 'sim') {
   return `${prefix}_${alphanumeric(10)}`;
@@ -67,11 +68,11 @@ export function buildWithdrawalPayload(userId, transaction = {}, overrides = {})
     device_fingerprint: newDeviceFingerprint(),
     timestamp: new Date().toISOString(),
     transaction: {
-      // NGN 50,000 - 250,000 in kobo. The previous ceiling (NGN 50,000) sat
-      // exactly on the "new payee, high amount" threshold most engines ship
-      // with, and those rules compare with `>`, so the rule never fired.
+      // 50,000 - 250,000 major units, expressed in minor units. An earlier
+      // ceiling sat exactly on the "new payee, high amount" threshold most
+      // engines ship with, and those rules compare with `>`, so it never fired.
       amount: randomInt(5000000, 25000000),
-      currency: 'NGN',
+      currency: currentLocale().currency,
       ...payee,
       is_new_payee: true,
       reference: newReference(),
@@ -127,7 +128,7 @@ export function buildSignupPayload(userId, overrides = {}) {
  * Carries a token, BIN and last four — never a full card number. See
  * `randomCardBin` for why.
  */
-export function buildCardAuthPayload(userId, card = {}, amountKobo = 5000, overrides = {}) {
+export function buildCardAuthPayload(userId, card = {}, amountMinor = 5000, overrides = {}) {
   return buildActionPayload(
     userId,
     'card_auth',
@@ -135,8 +136,8 @@ export function buildCardAuthPayload(userId, card = {}, amountKobo = 5000, overr
       card_token: card.token ?? newCardToken(),
       card_bin: card.bin ?? randomCardBin(),
       card_last4: card.last4 ?? randomLast4(),
-      amount: amountKobo,
-      currency: 'NGN',
+      amount: amountMinor,
+      currency: currentLocale().currency,
       entry_mode: 'card_not_present',
     },
     overrides
@@ -147,11 +148,11 @@ export function buildCardAuthPayload(userId, card = {}, amountKobo = 5000, overr
  * An account-to-account transfer. Structurally a withdrawal, but names the
  * destination account explicitly so mule-network runs can be traced.
  */
-export function buildTransferPayload(userId, destinationAccount, amountKobo, overrides = {}) {
+export function buildTransferPayload(userId, destinationAccount, amountMinor, overrides = {}) {
   return buildWithdrawalPayload(
     userId,
     {
-      amount: amountKobo,
+      amount: amountMinor,
       payee_account: destinationAccount,
       is_new_payee: overrides.isNewPayee ?? true,
     },
