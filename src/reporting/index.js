@@ -119,28 +119,33 @@ function renderText(result, options = {}) {
   const width = Math.max(20, ...all.map((r) => String(r.scenarioId).length));
 
   const lines = [];
-  lines.push('');
-  lines.push(
-    `  ${pad('SCENARIO', width)}  ${rpad('EVENTS', 6)}  ${rpad('BLOCK', 6)}  ${rpad('CHALL', 6)}  ${rpad('ALLOW', 6)}  ${rpad('RATE', 7)}  OUTCOME`
-  );
-  lines.push(`  ${'-'.repeat(width + 48)}`);
 
-  for (const r of reports) {
-    const o = outcomeFor(r);
+  // A run of customer traffic alone has no attack half; an empty table and a
+  // "TOTAL 0 events" line would read as a run that measured nothing.
+  if (reports.length) {
+    lines.push('');
     lines.push(
-      `  ${pad(r.scenarioId, width)}  ${rpad(r.attempts, 6)}  ${rpad(r.blocked, 6)}  ` +
-        `${rpad(r.stepUp, 6)}  ${rpad(r.allowed, 6)}  ${rpad((r.blockRate * 100).toFixed(1) + '%', 7)}  ${o.label}`
+      `  ${pad('SCENARIO', width)}  ${rpad('EVENTS', 6)}  ${rpad('BLOCK', 6)}  ${rpad('CHALL', 6)}  ${rpad('ALLOW', 6)}  ${rpad('RATE', 7)}  OUTCOME`
     );
-  }
+    lines.push(`  ${'-'.repeat(width + 48)}`);
 
-  lines.push('');
-  lines.push(
-    `  TOTAL  ${totals.attempts} events · ${totals.scoredAttempts} scored · ` +
-      `${(totals.blockRate * 100).toFixed(1)}% blocked · ${totals.errors} errors`
-  );
+    for (const r of reports) {
+      const o = outcomeFor(r);
+      lines.push(
+        `  ${pad(r.scenarioId, width)}  ${rpad(r.attempts, 6)}  ${rpad(r.blocked, 6)}  ` +
+          `${rpad(r.stepUp, 6)}  ${rpad(r.allowed, 6)}  ${rpad((r.blockRate * 100).toFixed(1) + '%', 7)}  ${o.label}`
+      );
+    }
 
-  if (totals.estimatedLossMinor > 0) {
-    lines.push(`  LOSS   ${formatMoney(totals.estimatedLossMinor, options)} extracted`);
+    lines.push('');
+    lines.push(
+      `  TOTAL  ${totals.attempts} events · ${totals.scoredAttempts} scored · ` +
+        `${(totals.blockRate * 100).toFixed(1)}% blocked · ${totals.errors} errors`
+    );
+
+    if (totals.estimatedLossMinor > 0) {
+      lines.push(`  LOSS   ${formatMoney(totals.estimatedLossMinor, options)} extracted`);
+    }
   }
 
   // The other half of the measurement, in its own table: here a block is the

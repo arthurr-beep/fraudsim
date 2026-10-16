@@ -311,3 +311,10 @@ test('velocity blocks on time-compressed customer traffic carry the clock caveat
   const [plain] = findingsFor([legitReport({ simulatedTime: true })]);
   assert.doesNotMatch(plain.detail, /Caveat/);
 });
+
+test('a customers-only run prints no empty attack table', () => {
+  const text = generateReport([legitReport()], { format: 'text' });
+  assert.doesNotMatch(text, /SCENARIO\s+EVENTS/);
+  assert.doesNotMatch(text, /TOTAL\s+0 events/);
+  assert.match(text, /LEGITIMATE TRAFFIC/);
+});
