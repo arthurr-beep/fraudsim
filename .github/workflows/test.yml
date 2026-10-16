@@ -27,3 +27,7 @@ jobs:
         run: npm test
       - name: Run integration tests
         run: npm run test:integration
+      # Starts both practice engines and drives the real CLI against them —
+      # the same walkthrough `npm run demo` records, so the demo stays true.
+      - name: Run end-to-end walkthrough
+        run: npm run test:e2e

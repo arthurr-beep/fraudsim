@@ -155,6 +155,24 @@ you have.
 Graduating to the real thing is a one-line change — swap the `baseUrl`. Full
 walk-through in **[docs/TESTING.md](docs/TESTING.md)**.
 
+### Watch the whole thing in 90 seconds
+
+From a clone of the repository, `npm run demo` starts both practice engines
+and walks through six acts in the terminal, paced to be followed:
+
+1. A credential-stuffing botnet is contained.
+2. An adaptive attacker that rotates IP, device and browser is defeated.
+3. A smarter attacker replays a device that was only challenged, and gets in.
+4. Ordinary customers get through the hardened engine.
+5. The full suite, gated like CI: an 85% block rate passes, and customers
+   blocked fail the run.
+6. An unreachable target exits 3 — fix the environment, not the rules.
+
+It finishes by opening the HTML report. Each act asserts what it shows, and CI
+runs the same walkthrough flat out (`npm run test:e2e`), so the demo cannot
+drift from what the tool does. `DEMO_PACE=<ms>` sets the pause per beat;
+`DEMO_LLM=anthropic` with `ANTHROPIC_API_KEY` puts a real model behind act 3.
+
 ---
 
 ## The command line

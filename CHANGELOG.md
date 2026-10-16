@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **End-to-end walkthrough** (`test/e2e/walkthrough.e2e.js`). Starts both
+  practice engines as real HTTP servers and drives the real CLI and library
+  against them in six acts: a contained botnet, a defeated adaptive attacker, a
+  smarter attacker finding the hardened engine's gap, customers getting
+  through, the full suite gated on block rate and false positives, and an
+  unreachable target exiting 3. `npm run demo` paces it for a screen recording
+  and opens the HTML report; `npm run test:e2e` runs it flat out and is part of
+  CI. Every act asserts what it shows.
+
+### Fixed
+
+- The terminal report no longer prints an empty attack table and a
+  "TOTAL 0 events" line for a run that contained only legitimate traffic.
+
 ## [0.5.0] — False positives, markets, a harder target — 2026-10-16
 
 The first npm release since 0.2.0. Versions 0.3.0 and 0.4.0 below were tagged
