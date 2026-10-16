@@ -34,11 +34,11 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
-      # Trusted publishing requires npm 11.5.1 or newer, which ships with
-      # neither Node 20 nor Node 22. Pinned to the 11 line rather than
-      # `latest`: npm 12 dropped Node 20 and broke this step on release.
+      # `npm stage publish` needs npm 11.15.0 or newer (trusted publishing
+      # alone needs 11.5.1), and neither ships with Node 20 or 22. Pinned to
+      # the 11 line rather than `latest`: npm 12 dropped Node 20.
       - name: Upgrade npm
-        run: npm install -g npm@^11.5.1
+        run: npm install -g npm@^11.15.0
 
       - run: npm ci
 
@@ -61,6 +61,10 @@ jobs:
       - name: Inspect the tarball contents
         run: npm pack --dry-run
 
-      - name: Publish
+      # Staged, not published: the trusted publisher on npm is stage-only, so
+      # a direct `npm publish` is refused (403). The version waits in the
+      # package's staged queue until a maintainer approves it on npmjs.com
+      # with 2FA, and only then becomes installable.
+      - name: Stage for approval
         if: github.event_name == 'release' || inputs.dry-run == false
-        run: npm publish --provenance --access public
+        run: npm stage publish --provenance --access public

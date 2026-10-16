@@ -71,7 +71,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/arthurr-beep/fraudsim.git"
+    "url": "git+https://github.com/arthurr-beep/fraudsim.git"
   },
   "bugs": {
     "url": "https://github.com/arthurr-beep/fraudsim/issues"
@@ -87,6 +87,6 @@
   },
   "types": "./types/index.d.ts",
   "bin": {
-    "fraud-sim": "./bin/fraud-sim.js"
+    "fraud-sim": "bin/fraud-sim.js"
   }
 }
