@@ -3,18 +3,29 @@ name: test
 on:
   push:
     branches: [main]
+  # Every pull request, not only those into main, so stacked PRs are tested
+  # before they are retargeted.
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      # One platform failing should not hide whether the others pass.
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         node-version: [22.x, 24.x]
+        # Windows and macOS on the current LTS only. Windows matters most: the
+        # CLI has to survive cmd and Git Bash path handling.
+        include:
+          - os: windows-latest
+            node-version: 24.x
+          - os: macos-latest
+            node-version: 24.x
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Use Node.js ${{ matrix.node-version }}
@@ -31,3 +42,18 @@ jobs:
       # the same walkthrough `npm run demo` records, so the demo stays true.
       - name: Run end-to-end walkthrough
         run: npm run test:e2e
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.x
+          cache: 'npm'
+      - run: npm ci
+      # Reported, not gated: the number is for spotting untested code in a
+      # review, and a threshold would invite tests written to move it.
+      - name: Report coverage
+        run: npm run test:coverage
