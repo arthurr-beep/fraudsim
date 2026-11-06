@@ -12,11 +12,12 @@
  * real LLM, set one of:
  *   OPENAI_API_KEY=sk-...       node examples/adaptive-attacker-demo/index.js
  *   ANTHROPIC_API_KEY=sk-ant-... node examples/adaptive-attacker-demo/index.js
+ *   DEEPSEEK_API_KEY=sk-...     node examples/adaptive-attacker-demo/index.js
  */
 
 import { run } from '../../src/index.js';
 import { httpAdapter } from '../../src/adapters/http.js';
-import { deterministic, openai, anthropic } from '../../src/llm/index.js';
+import { deterministic, openai, anthropic, deepseek } from '../../src/llm/index.js';
 
 const target = httpAdapter({
   baseUrl: process.env.TARGET_URL ?? 'http://localhost:4100',
@@ -29,6 +30,8 @@ if (process.env.OPENAI_API_KEY) {
   llm = openai({ apiKey: process.env.OPENAI_API_KEY });
 } else if (process.env.ANTHROPIC_API_KEY) {
   llm = anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+} else if (process.env.DEEPSEEK_API_KEY) {
+  llm = deepseek({ apiKey: process.env.DEEPSEEK_API_KEY });
 } else {
   llm = deterministic({ seed: 42 });
 }

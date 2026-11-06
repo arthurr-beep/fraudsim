@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`deepseek()` LLM provider** (`fraud-sim/llm`) for the adaptive attacker.
+  Calls DeepSeek's Chat Completions API with JSON output, defaulting to
+  `deepseek-flash`. Thinking mode is off by default, because DeepSeek enables
+  it unless told otherwise and a slow reply sends the round to the fallback.
+  Pass `thinking: true` (and optionally `reasoningEffort`) to turn it on,
+  which also raises the timeout from 10s to 60s. `baseUrl` and `timeoutMs` are
+  configurable. The adaptive-attacker demo picks it up from `DEEPSEEK_API_KEY`.
+
 ### Changed
 
 - **Node.js 22 or newer is required.** Node 20 reached end of life in April

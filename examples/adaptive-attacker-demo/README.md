@@ -29,6 +29,8 @@ set an API key first:
 OPENAI_API_KEY=sk-...        npm run example:adaptive
 # or
 ANTHROPIC_API_KEY=sk-ant-... npm run example:adaptive
+# or
+DEEPSEEK_API_KEY=sk-...      npm run example:adaptive
 ```
 
 ## What you'll see
