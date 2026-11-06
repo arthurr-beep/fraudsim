@@ -47,6 +47,8 @@
     "test:integration": "cd test/integration && node --test",
     "test:all": "cd test && node --test",
     "test:e2e": "node --test test/e2e/walkthrough.e2e.js",
+    "test:types": "npm run build:types && tsc -p test/typecheck/tsconfig.json",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**\" --test-coverage-include=\"bin/**\" \"test/unit/*.test.js\" \"test/integration/*.test.js\"",
     "demo": "node --test-reporter=spec test/e2e/walkthrough.e2e.js",
     "demo:npm": "node --test-reporter=spec test/e2e/walkthrough.e2e.js --from-npm",
     "lint": "eslint .",
@@ -58,7 +60,7 @@
     "example:adaptive-target": "node examples/adaptive-attacker-demo/demo-target.js",
     "example:adaptive": "node examples/adaptive-attacker-demo/index.js",
     "build:types": "tsc",
-    "prepublishOnly": "npm run build:types && npm run lint && npm run test:all",
+    "prepublishOnly": "npm run test:types && npm run lint && npm run test:all",
     "example:adaptive-hardened": "node examples/adaptive-hardened-demo/index.js"
   },
   "keywords": [

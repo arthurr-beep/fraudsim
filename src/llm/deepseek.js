@@ -51,7 +51,7 @@ Respond ONLY with valid JSON: { "reasoning": "...", "parameters": {...} }`;
  * @param {number} [config.timeoutMs] - Defaults to 10000, or 60000 with thinking on.
  * @param {string} [config.baseUrl='https://api.deepseek.com']
  * @param {function} [config.fetch] - Injectable fetch, for testing.
- * @returns {{ name: string, generateStrategy: function }}
+ * @returns {import('../types.js').LlmProvider}
  */
 export function deepseek(config = {}) {
   const {

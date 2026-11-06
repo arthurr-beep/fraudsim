@@ -41,7 +41,7 @@ Respond ONLY with valid JSON: { "reasoning": "...", "parameters": {...} }`;
  * @param {string} [config.model='claude-sonnet-5-5']
  * @param {number} [config.maxTokens=16000]
  * @param {function} [config.fetch] - Injectable fetch, for testing.
- * @returns {{ name: string, generateStrategy: function }}
+ * @returns {import('../types.js').LlmProvider}
  */
 export function anthropic(config = {}) {
   const { apiKey, model = 'claude-sonnet-5-5', maxTokens = DEFAULT_MAX_TOKENS } = config;

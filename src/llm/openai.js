@@ -36,7 +36,7 @@ Respond ONLY with valid JSON: { "reasoning": "...", "parameters": {...} }`;
  * @param {string} [config.model='gpt-4o']
  * @param {number} [config.temperature=0.7]
  * @param {function} [config.fetch] - Injectable fetch, for testing.
- * @returns {{ name: string, generateStrategy: function }}
+ * @returns {import('../types.js').LlmProvider}
  */
 export function openai(config = {}) {
   const { apiKey, model = 'gpt-4o', temperature = 0.7 } = config;
