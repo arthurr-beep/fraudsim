@@ -70,7 +70,7 @@ export function httpAdapter(config) {
 
   if (!fetchImpl) {
     throw new Error(
-      'No fetch implementation found. Use Node 20+, or pass { fetch } to httpAdapter.'
+      'No fetch implementation found. Use Node 22+, or pass { fetch } to httpAdapter.'
     );
   }
 
