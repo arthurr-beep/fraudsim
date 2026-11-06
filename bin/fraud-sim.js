@@ -150,6 +150,18 @@ const IDENTITY_OPTIONS = {
 };
 
 /**
+ * Options that take a list. `coerce` only makes an array when the value has a
+ * comma in it, so `--option targetUserIds=u1` would arrive as a bare string
+ * and fail the scenario's validation.
+ */
+const LIST_OPTIONS = new Set(['targetUserIds']);
+
+function shaped(key, value, declared) {
+  const isList = LIST_OPTIONS.has(key) || Array.isArray(declared[key]);
+  return isList && !Array.isArray(value) ? [value] : value;
+}
+
+/**
  * Build the option set for one scenario.
  *
  * Precedence, lowest first:
@@ -173,11 +185,11 @@ function optionsFor(scenarioId, flags) {
   if ('targetUserIds' in options && 'targetUserId' in options) delete options.targetUserId;
 
   for (const [key, value] of Object.entries(flags.option)) {
-    if (key in declared) options[key] = value;
+    if (key in declared) options[key] = shaped(key, value, declared);
   }
 
   for (const [key, value] of Object.entries(flags.scopedOption[scenarioId] ?? {})) {
-    options[key] = value;
+    options[key] = shaped(key, value, declared);
   }
 
   return options;

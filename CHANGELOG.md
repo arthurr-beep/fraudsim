@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `--option targetUserIds=<one id>` failed with "must be a non-empty array":
+  only a value containing a comma became a list. A single value for a list
+  option is now passed as a one-element list, in both the global and the
+  `<scenario>.key` forms.
 - The README's second CLI section showed commands and flags that do not exist
   (`compare`, `suite owasp-baseline`, `--target`, `--auth`, `--user`,
   `--attackers`, `--output`). It now shows real `run` and `suite --scenarios`
