@@ -51,7 +51,7 @@ It works against any HTTP API. It uses no real fraud data. It includes an LLM-po
 - **10 attack scenarios** — credential stuffing, account drain, card testing, promo abuse, mule networks, slow drain, session hijack, SIM swap takeover, velocity evasion, and the LLM-driven adaptive attacker
 - **Legitimate customer traffic** — ordinary logins, new phones, travel and payments, so a run reports its false-positive rate next to its block rate. A defence that blocks everything scores 100% on attacks and fails here
 - **Target-agnostic** — works against any REST API via a configurable adapter
-- **LLM-driven adaptive attacker** — bring your own OpenAI, Anthropic, or local model. A deterministic fallback works without any LLM
+- **LLM-driven adaptive attacker** — bring your own OpenAI, Anthropic, DeepSeek, or local model. A deterministic fallback works without any LLM
 - **Structured event stream** — every action emits a typed event. Pipe it to a dashboard, log it, or stream it via Server-Sent Events
 - **Reports and CI** — a `fraud-sim` command line, plus HTML, JUnit, JSON and terminal reports with findings ranked by what they cost
 - **Safe by default** — an enforced ceiling of 25 requests/second, not just per-scenario pacing, so a mistyped delay stays a simulation
@@ -351,6 +351,18 @@ console.log(`\nOutcome: ${report.outcome}`);
 console.log(`The attacker took ${report.rounds} rounds to ${report.outcome === 'attacker_defeated' ? 'give up' : 'succeed'}.`);
 ```
 
+Prefer DeepSeek or OpenAI? Swap the provider; nothing else changes:
+
+```js
+import { deepseek } from 'fraud-sim/llm';
+const llm = deepseek({ apiKey: process.env.DEEPSEEK_API_KEY }); // model: 'deepseek-flash' by default
+```
+
+The DeepSeek provider turns thinking mode off unless you pass `thinking: true`:
+each round is a small JSON decision, and a reply slower than the timeout counts
+as a failure and goes to the fallback. Turning thinking on raises the timeout
+to 60 seconds; set `timeoutMs` to choose your own.
+
 Don't have an LLM API key? Use the deterministic fallback — it runs without any external API and produces reproducible results:
 
 ```js
@@ -578,7 +590,7 @@ Round 4: LLM reasons: "Velocity threshold hit. I'll rotate the IP and keep
 
 **Defensive systems that defeat the adaptive attacker do so because rules stack.** Defeating one signal exposes the next. A system with only one rule (say, IP reputation) can be evaded by changing IPs. A system with nine independent signals — velocity, device, geo, behaviour, payee, session continuity — cannot be evaded by changing any one of them.
 
-The library ships with three LLM providers (OpenAI, Anthropic, and a deterministic fallback) and a clean interface for plugging in others — see `src/llm/`.
+The library ships with four LLM providers (OpenAI, Anthropic, DeepSeek, and a deterministic fallback) and a clean interface for plugging in others — see `src/llm/`.
 
 ---
 
