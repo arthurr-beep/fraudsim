@@ -16,6 +16,7 @@
  * @typedef {import('./types.js').ScenarioReport} ScenarioReport
  * @typedef {import('./types.js').SuiteReport} SuiteReport
  * @typedef {import('./types.js').TargetAdapter} TargetAdapter
+ * @typedef {import('./types.js').LlmProvider} LlmProvider
  */
 
 import { Runner, DEFAULT_MAX_REQUESTS_PER_SECOND } from './runner.js';
@@ -53,6 +54,9 @@ for (const scenario of builtInScenarios) {
  * @param {object} [config.options] - Scenario-specific options (merged with defaults)
  * @param {function} [config.onEvent] - Event callback (event) => void
  * @param {AbortSignal} [config.signal] - For cancellation
+ * @param {LlmProvider} [config.llm] - Strategy generator for scenarios that
+ *   adapt; others ignore it.
+ * @param {string} [config.locale] - Market to simulate, e.g. 'GB'. See LOCALES.
  * @param {number} [config.seed] - Seed the run's randomness so it replays
  *   identically. Controls every generated value (IPs, devices, amounts,
  *   ordering) but not wall-clock timestamps.
@@ -80,10 +84,13 @@ export async function run(scenarioId, config = {}) {
  *
  * @param {object} config
  * @param {string} config.name - Human-readable suite name
- * @param {Array<{id: string, options?: object}>} config.scenarios
+ * @param {Array<{id: string, options?: object, llm?: LlmProvider}>} config.scenarios
  * @param {TargetAdapter} config.target
  * @param {function} [config.onEvent]
  * @param {AbortSignal} [config.signal]
+ * @param {LlmProvider} [config.llm] - Default for every scenario; an entry's
+ *   own `llm` wins.
+ * @param {string} [config.locale] - Market to simulate, e.g. 'GB'.
  * @param {number} [config.seed] - Seeds the suite. Each scenario gets a
  *   distinct derived seed, so the suite replays as a whole without every
  *   scenario drawing the same values.

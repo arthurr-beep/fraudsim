@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -22,3 +21,8 @@ jobs:
       - run: npm ci
       - name: Run ESLint
         run: npm run lint
+      # The declarations are otherwise only built at publish time, so a broken
+      # `exports` entry or a README example that no longer type-checks would
+      # first be found by a user.
+      - name: Check type declarations
+        run: npm run test:types
