@@ -17,7 +17,11 @@ import { deterministic } from './deterministic.js';
 const ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 const TIMEOUT_MS = 10000;
-const DEFAULT_MAX_TOKENS = 1024;
+// Current Claude models think before answering when `thinking` is omitted,
+// and that thinking counts against max_tokens. A tight cap can be spent before
+// the JSON is written, which would quietly hand every round to the fallback.
+// You pay for tokens used, not for the cap.
+const DEFAULT_MAX_TOKENS = 16000;
 
 const SYSTEM_PROMPT = `You are simulating a fraud actor probing a fintech security system.
 You can only observe API responses — you cannot see the rules.
@@ -34,13 +38,13 @@ Respond ONLY with valid JSON: { "reasoning": "...", "parameters": {...} }`;
 /**
  * @param {object} config
  * @param {string} config.apiKey - Anthropic API key.
- * @param {string} [config.model='claude-sonnet-5']
- * @param {number} [config.maxTokens=1024]
+ * @param {string} [config.model='claude-sonnet-5-5']
+ * @param {number} [config.maxTokens=16000]
  * @param {function} [config.fetch] - Injectable fetch, for testing.
  * @returns {{ name: string, generateStrategy: function }}
  */
 export function anthropic(config = {}) {
-  const { apiKey, model = 'claude-sonnet-5', maxTokens = DEFAULT_MAX_TOKENS } = config;
+  const { apiKey, model = 'claude-sonnet-5-5', maxTokens = DEFAULT_MAX_TOKENS } = config;
   const fetchImpl = config.fetch ?? globalThis.fetch;
   const fallback = deterministic({ seed: config.seed ?? 1 });
 

@@ -18,7 +18,7 @@ function okFetch(text) {
 }
 
 test('accepts apiKey and model config and reports its name', () => {
-  const provider = anthropic({ apiKey: 'sk-ant', model: 'claude-sonnet-5' });
+  const provider = anthropic({ apiKey: 'sk-ant', model: 'claude-sonnet-5-5' });
   assert.equal(provider.name, 'anthropic');
 });
 
@@ -44,6 +44,20 @@ test('sends x-api-key and anthropic-version headers', async () => {
   await provider.generateStrategy(input);
   assert.equal(captured.headers['x-api-key'], 'sk-ant-secret');
   assert.equal(captured.headers['anthropic-version'], '2023-06-01');
+});
+
+test('defaults to a current model with room for thinking before the answer', async () => {
+  let body;
+  const provider = anthropic({
+    apiKey: 'sk-ant',
+    fetch: async (url, opts) => {
+      body = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: '{"reasoning":"x","parameters":{}}' }] }) };
+    },
+  });
+  await provider.generateStrategy(input);
+  assert.equal(body.model, 'claude-sonnet-5-5');
+  assert.equal(body.max_tokens, 16000);
 });
 
 test('extracts JSON even when wrapped in prose', async () => {

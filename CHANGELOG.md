@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Node.js 22 or newer is required.** Node 20 reached end of life in April
+  2026. CI now tests on Node 22 and 24, and releases are built on Node 24.
+- The `anthropic()` provider defaults to `claude-sonnet-5-5` (was
+  `claude-sonnet-5`) and to `maxTokens: 16000` (was 1024). Current models think
+  before answering, and that thinking counts against the cap; at 1024 it could
+  use the whole budget before any JSON was written, and the round quietly went
+  to the deterministic fallback. Pass `model` or `maxTokens` to keep the old
+  behaviour.
+
+### Fixed
+
+- The README's second CLI section showed commands and flags that do not exist
+  (`compare`, `suite owasp-baseline`, `--target`, `--auth`, `--user`,
+  `--attackers`, `--output`). It now shows real `run` and `suite --scenarios`
+  invocations.
+- The README's adaptive-attacker example named `claude-sonnet-4-20250514`,
+  which was retired on 2026-06-15; copying it sent every round to the
+  fallback.
+- CONTRIBUTING's setup steps changed into the wrong directory after cloning.
+
 ## [0.5.1] — Cleaner customer-only output, end-to-end walkthrough — 2026-10-16
 
 ### Added

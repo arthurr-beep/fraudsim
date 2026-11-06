@@ -30,13 +30,14 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20.x
+          node-version: 24.x
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
       # `npm stage publish` needs npm 11.15.0 or newer (trusted publishing
-      # alone needs 11.5.1), and neither ships with Node 20 or 22. Pinned to
-      # the 11 line rather than `latest`: npm 12 dropped Node 20.
+      # alone needs 11.5.1), which the bundled npm is not guaranteed to be.
+      # Pinned to the 11 line rather than `latest` so a new npm major cannot
+      # change the release path without a deliberate bump here.
       - name: Upgrade npm
         run: npm install -g npm@^11.15.0
 

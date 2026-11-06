@@ -7,7 +7,7 @@
 [![tests](https://github.com/arthurr-beep/fraudsim/workflows/test/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
 [![lint](https://github.com/arthurr-beep/fraudsim/workflows/lint/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
 [![secret-scan](https://github.com/arthurr-beep/fraudsim/workflows/secret-scan/badge.svg)](https://github.com/arthurr-beep/fraudsim/actions)
-[![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org)
+[![node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
 
 `fraud-sim` is a target-agnostic library for generating realistic fraud attack traffic — credential stuffing, account takeovers, card testing, and LLM-driven adaptive attackers — against any fraud detection system you want to evaluate. Alongside the attacks it sends ordinary customer traffic, so every run measures both what your defence stops and who it wrongly locks out.
 
@@ -72,7 +72,7 @@ It works against any HTTP API. It uses no real fraud data. It includes an LLM-po
 npm install fraud-sim
 ```
 
-Requires Node.js 20 or higher. The package is ESM-only — `require('fraud-sim')`
+Requires Node.js 22 or higher. The package is ESM-only — `require('fraud-sim')`
 throws `ERR_REQUIRE_ESM`. From a CommonJS project, use a dynamic import:
 
 ```js
@@ -330,7 +330,7 @@ const target = httpAdapter({
 
 const llm = anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-5-5',
 });
 
 const report = await run('adaptive-attacker', {
@@ -452,24 +452,22 @@ const scenarios = listScenarios(); // synchronous
 For quick experiments without writing code:
 
 ```bash
+# One scenario
 npx fraud-sim run credential-stuffing \
-  --target https://api.your-fraud-system.com \
-  --auth "Bearer $API_KEY" \
-  --user user_001 \
-  --attackers 50
+  --target-url https://api.your-fraud-system.com \
+  --header "Authorization: Bearer $API_KEY" \
+  --option targetUserIds=user_001,user_002 \
+  --option attackerCount=50
 
-# Run a full benchmark suite
-npx fraud-sim suite owasp-baseline \
-  --target https://api.your-fraud-system.com \
-  --auth "Bearer $API_KEY" \
-  --output report.html
-
-# Compare two targets
-npx fraud-sim compare \
-  --target-a "https://api.system-a.com" \
-  --target-b "https://api.system-b.com" \
-  --suite owasp-baseline
+# A chosen set of scenarios, written to an HTML report
+npx fraud-sim suite --scenarios credential-stuffing,card-testing,legitimate-users \
+  --target-url https://api.your-fraud-system.com \
+  --header "Authorization: Bearer $API_KEY" \
+  --report report.html
 ```
+
+`npx fraud-sim --help` lists every flag. See [The command line](#the-command-line)
+for running the full suite and gating CI on the result.
 
 ---
 
