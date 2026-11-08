@@ -21,7 +21,7 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 
 ```bash
 git clone https://github.com/arthurr-beep/fraudsim.git
-cd fraud-sim
+cd fraudsim
 npm install
 npm test
 ```
