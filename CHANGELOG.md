@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — DeepSeek provider, Node 22, typed LLM options — 2026-11-08
+
 ### Added
 
 - **`deepseek()` LLM provider** (`fraud-sim/llm`) for the adaptive attacker.
