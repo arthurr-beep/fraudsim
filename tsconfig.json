@@ -5,6 +5,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "types",
+    "rootDir": "src",
     "target": "es2022",
     "module": "node16",
     "moduleResolution": "node16",

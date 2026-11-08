@@ -17,3 +17,8 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    # @types/node tracks the oldest supported Node (engines.node), not the
+    # newest; newer typings would accept APIs that line doesn't have.
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
