@@ -186,6 +186,8 @@ export function outcomeFor(report) {
  * Deliberately conservative: it reports what the data supports and does not
  * guess at causes. A generated finding that speculates is a finding a reader
  * will eventually catch being wrong.
+ *
+ * @returns {Array<{ severity: string, scenario: string, title: string, detail: string, stats: Array<[string, unknown]> }>}
  */
 export function findingsFor(reports, options = {}) {
   const money = (minor) => formatMoney(minor, options);
