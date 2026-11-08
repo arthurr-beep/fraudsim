@@ -41,7 +41,7 @@ const COMMON_USER_AGENTS = [
 /**
  * @param {object} [config]
  * @param {number} [config.seed=1] - Seed for reproducible strategies.
- * @returns {{ name: string, generateStrategy: function }}
+ * @returns {import('../types.js').LlmProvider}
  */
 export function deterministic(config = {}) {
   const seed = config.seed ?? 1;

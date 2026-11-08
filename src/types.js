@@ -59,12 +59,21 @@
  */
 
 /**
+ * A strategy generator for the adaptive attacker — `openai()`, `anthropic()`,
+ * `deepseek()`, `deterministic()`, or your own.
+ *
+ * @typedef {object} LlmProvider
+ * @property {string} name
+ * @property {(input: { scenarioId: string, history: object[], round: number, maxRound: number }) => Promise<{ reasoning: string, parameters: object }>} generateStrategy
+ */
+
+/**
  * What the runner provides to a scenario.
  *
  * @typedef {object} ScenarioContext
  * @property {object} options - Defaults merged with the caller's options.
  * @property {TargetAdapter} target - Already wrapped with the run's rate limit.
- * @property {object} [llm] - Present only for scenarios that use one.
+ * @property {LlmProvider} [llm] - Present only for scenarios that use one.
  * @property {(event: ScenarioEvent) => void} emit
  * @property {AbortSignal} signal
  */
